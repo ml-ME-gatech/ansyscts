@@ -70,7 +70,7 @@ def main():
     
     config.DEBUG_ = args.debug  
     config.RUN_MODE_ = args.rmode
-    
+
     #check if folder exists
     folder = Path(args.folder).resolve()
     if not folder.exists():
@@ -84,7 +84,7 @@ def main():
                         format='%(asctime)s %(levelname)-8s %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
     
-    logger.info(f'Starting coupled CFD-Structural simulation in folder {folder} in mode: {args.mode}')
+    logger.info(f'Starting coupled CFD-Structural simulation in folder {folder}')
     if config.DEBUG_:
         logger.info('Debugging active')
 
