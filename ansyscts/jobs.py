@@ -23,7 +23,10 @@ import logging
 logger = logging.getLogger("ansyscts")
 
 _PARENT = Path(os.getcwd())
+
+#will need to setup this up in a config file
 TTUBE_NODE_FILE = _PARENT.joinpath('ttube.node.loc')
+TTUBE_DAT_FILE = _PARENT.joinpath('ttube_half.dat')
 APDL_SCRIPTS_FOLDER = Path(__file__).parent.resolve().joinpath('apdl_scripts')
 
 class SlurmJob(ABC):
@@ -190,6 +193,10 @@ class StructuralAnalysisJob(SlurmJob):
         
         if not APDL_SCRIPTS_FOLDER.exists():
             logger.error(f"APDL scripts folder {str(APDL_SCRIPTS_FOLDER)} does not exist. Cannot proceed with structural analysis")
+            return False
+        
+        if not TTUBE_DAT_FILE.exists():
+            logger.error(f"TTUBE data file {str(TTUBE_DAT_FILE)} does not exist. Cannot proceed with structural analysis")
             return False
         
         #copy the interpolated temperature file to the temp directory
