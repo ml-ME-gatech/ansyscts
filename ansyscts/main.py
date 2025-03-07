@@ -60,13 +60,17 @@ def main():
     parser.add_argument('folder',type = str)
     parser.add_argument('--path_to_watch',type = str,default = 'output',
                         help = '(Relative) Path to watch for new CFD output files')
-    parser.add_argument('--mode',type = str,default = 'running')
+    parser.add_argument('--rmode',type = str,default = 'continue')
+    parser.add_argument('--smode',type = str,default = 'running')
     parser.add_argument('--debug',action = 'store_true',help="Enable debug mode.")
     
     args = parser.parse_args()
-    assert args.mode in {'running','interrupted'}, 'mode must be either running or interrupted'
+    assert args.smode in {'running','interrupted'}, 'mode must be either running or interrupted'
+    assert args.rmode in {'continue','restart'}, 'mode must be either continue or restart'
     
     config.DEBUG_ = args.debug  
+    config.RUN_MODE_ = args.rmode
+    
     #check if folder exists
     folder = Path(args.folder).resolve()
     if not folder.exists():
@@ -83,6 +87,9 @@ def main():
     logger.info(f'Starting coupled CFD-Structural simulation in folder {folder} in mode: {args.mode}')
     if config.DEBUG_:
         logger.info('Debugging active')
+
+    logger.info(f'Run mode: {config.RUN_MODE_}')   
+    logger.info(f'Simulation mode: {args.smode}') 
 
     #run the job
     if args.mode == 'running':

@@ -10,6 +10,7 @@ from sim_datautil.sim_datautil.dutil import SimulationDatabase
 from ansyscts.jobs import PreProcessCFDOutputJob, StructuralAnalysisJob, PostProcess, SlurmJob
 from ansyscts.miscutil import _parse_fluent_output_filename, _is_file_complete, _safe_file_copy, _exit_error
 import logging
+from ansyscts.config import RUN_MODE_
 
 logger = logging.getLogger("ansyscts")
 
@@ -17,14 +18,12 @@ class CFDOutputFileHandler(FileSystemEventHandler):
 
     def __init__(self,folder: Path,
                       parent: Path = None,
-                      max_workers: int = 5,
-                      mode = 'continued'):
+                      max_workers: int = 5):
+        
         super().__init__()
         self.executor = ThreadPoolExecutor(max_workers)
         self.folder = folder
         self.running_jobs = {}
-        assert mode in {'continued','restart'}, 'mode must be either continued or restart'
-        self.mode= mode
         self.parent = self.folder.parent if parent is None else parent
     
     def on_created(self, event):
@@ -40,13 +39,15 @@ class CFDOutputFileHandler(FileSystemEventHandler):
         results = False
         try:
             results = job.run(*args,**kwargs)
+        except Exception as e:
+            self.error_process(f"Error running job {job}: {str(e)}")
         finally: 
             self.running_jobs.pop(key)
         
         return results
     
     def error_process(self, msg: str):
-        if self.mode == 'restart':
+        if RUN_MODE_ == 'restart':
             _exit_error(msg)
         else:
             logger.error(msg)
