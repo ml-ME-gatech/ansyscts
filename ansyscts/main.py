@@ -6,6 +6,7 @@ from ansyscts.miscutil import _exit_error
 from pathlib import Path
 from watchdog.observers.polling import PollingObserver
 import datetime
+import ansyscts.config as config
 
 logger = logging.getLogger("ansyscts")
 
@@ -60,10 +61,12 @@ def main():
     parser.add_argument('--path_to_watch',type = str,default = 'output',
                         help = '(Relative) Path to watch for new CFD output files')
     parser.add_argument('--mode',type = str,default = 'running')
+    parser.add_argument('--debug',action = 'store_true',help="Enable debug mode.")
     
     args = parser.parse_args()
     assert args.mode in {'running','interrupted'}, 'mode must be either running or interrupted'
-
+    
+    config.DEBUG_ = args.debug  
     #check if folder exists
     folder = Path(args.folder).resolve()
     if not folder.exists():
@@ -76,7 +79,10 @@ def main():
     logging.basicConfig(filename = str(folder.joinpath(f'ansyscts-{timestamp}.log')),level = logging.INFO,
                         format='%(asctime)s %(levelname)-8s %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
+    
     logger.info(f'Starting coupled CFD-Structural simulation in folder {folder} in mode: {args.mode}')
+    if config.DEBUG_:
+        logger.info('Debugging active')
 
     #run the job
     if args.mode == 'running':

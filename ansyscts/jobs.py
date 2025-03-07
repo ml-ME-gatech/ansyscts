@@ -17,6 +17,8 @@ from linearization_lib.linearization.vinterp import interpolate_nodal_temperatur
 
 from ansyscts.miscutil import _safe_read_csv_file, _safe_file_copy, _try_to_delete_file
 from ansyscts.post import post_process_directory
+from ansyscts.config import DEBUG_
+import datetime
 
 import logging
 
@@ -161,12 +163,16 @@ def preprocess_cfd_output(cfd_input_file: Path,
 class StructuralAnalysisJob(SlurmJob):
 
     def __init__(self,name: str,
-                        client: Client = None,
-                        cluster: SLURMCluster = None,
-                        parent_dir: Path = None):
+                    client: Client = None,
+                    cluster: SLURMCluster = None,
+                    parent_dir: Path = None):
         super().__init__(name,client,cluster)
         parent_dir = Path(__file__).parent if parent_dir is None else parent_dir
-        self.dir = TemporaryDirectory(dir=str(parent_dir))
+        if not DEBUG_:
+            self.dir = TemporaryDirectory(dir=str(parent_dir))
+        else:
+            timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+            self.dir = Path(parent_dir).joinpath(f'debug-{timestamp}')
 
     def make_client(self):
         additional_directives = [
@@ -212,7 +218,7 @@ class StructuralAnalysisJob(SlurmJob):
         success = self._run(run_apdl_shell_command,_temp_path,result_path)
         
         #clean up the temp directory if process executed normally, otherwise, need to save
-        if success:
+        if success and not DEBUG_:
             self.dir.cleanup()
         
         return success
