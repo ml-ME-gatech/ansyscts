@@ -27,7 +27,7 @@ _PARENT = Path(os.getcwd())
 #will need to setup this up in a config file
 TTUBE_NODE_FILE = _PARENT.joinpath('ttube.node.loc')
 TTUBE_DAT_FILE = _PARENT.joinpath('ttube_half.dat')
-APDL_SCRIPTS_FOLDER = Path(__file__).parent.resolve().joinpath('apdl_scripts')
+APDL_SCRIPTS_FOLDER = Path(__file__).parent.parent.resolve().joinpath('apdl_scripts')
 
 class SlurmJob(ABC):
 
@@ -72,7 +72,6 @@ class SlurmJob(ABC):
         return results                              
     
     def kill(self):
-        logger.info(f"Killing SLURM jobs for {self.name}")
         try:
             if self.client and self.future:
                 self.client.cancel(self.future,force = True)
@@ -183,7 +182,6 @@ class StructuralAnalysisJob(SlurmJob):
     def run(self,   interpolated_temperature_file: Path,
                     result_path: Path) -> bool:
         
-
         _temp_path = Path(self.dir.name).resolve()
         if not _temp_path.exists():
             _temp_path.mkdir(parents=True)
