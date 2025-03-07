@@ -1,8 +1,8 @@
 import logging
 import argparse
-from ansyscts.ansyscts.events import CFDOutputFileHandler, Runner
+from ansyscts.events import CFDOutputFileHandler, Runner
 from sim_datautil.sim_datautil.dutil import SimulationDatabase
-from ansyscts.ansyscts.miscutil import _exit_error
+from ansyscts.miscutil import _exit_error
 from pathlib import Path
 from watchdog.observers.polling import PollingObserver
 import datetime

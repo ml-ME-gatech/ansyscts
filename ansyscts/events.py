@@ -7,8 +7,8 @@ import time
 import sys
 
 from sim_datautil.sim_datautil.dutil import SimulationDatabase
-from ansyscts.ansyscts.jobs import PreProcessCFDOutputJob, StructuralAnalysisJob, PostProcess, SlurmJob
-from ansyscts.ansyscts.miscutil import _parse_fluent_output_filename, _is_file_complete, _safe_file_copy, _exit_error
+from ansyscts.jobs import PreProcessCFDOutputJob, StructuralAnalysisJob, PostProcess, SlurmJob
+from ansyscts.miscutil import _parse_fluent_output_filename, _is_file_complete, _safe_file_copy, _exit_error
 import logging
 
 logger = logging.getLogger("ansyscts")
