@@ -92,7 +92,7 @@ def main():
     logger.info(f'Simulation mode: {args.smode}') 
 
     #run the job
-    if args.mode == 'running':
+    if args.smode == 'running':
         running_job(folder,args)
     else:
         interrupted_job(folder,args)
