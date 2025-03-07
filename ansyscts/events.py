@@ -17,6 +17,7 @@ logger = logging.getLogger("ansyscts")
 class CFDOutputFileHandler(FileSystemEventHandler):
 
     def __init__(self,folder: Path,
+                      db_name: str | Path,
                       parent: Path = None,
                       max_workers: int = 5):
         
@@ -25,6 +26,7 @@ class CFDOutputFileHandler(FileSystemEventHandler):
         self.folder = folder
         self.running_jobs = {}
         self.parent = self.folder.parent if parent is None else parent
+        self.db_name = db_name  
     
     def on_created(self, event):
         file = Path(event.src_path)
@@ -91,7 +93,7 @@ class CFDOutputFileHandler(FileSystemEventHandler):
                 logger.info('Post-processing structural results')
                 post_process = PostProcess('post_process - '+file.stem)
 
-                if not self.run(post_process,struct_results_folder,file,interp_file,time_step):
+                if not self.run(post_process,struct_results_folder,file,interp_file,time_step,self.db_name):
                     self.error_process(f"Post-processing of structural file {file} failed")
                 
                 logger.info(f"Analysis of {file} completed successfully")

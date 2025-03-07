@@ -24,6 +24,7 @@ def running_job(folder: Path,
     logger.info(f'Watching {PATH_TO_WATCH} for new CFD output files')
 
     event_handler = CFDOutputFileHandler(PATH_TO_WATCH,
+                                         args.db_name,
                                          parent = os.getcwd(),
                                          max_workers = config.MAX_WORKERS_)
     observer = PollingObserver()
@@ -34,8 +35,7 @@ def running_job(folder: Path,
     runner.run()
 
 def interrupted_job(folder: Path,
-                    args: argparse.Namespace,
-                    db_name: Path):
+                    args: argparse.Namespace):
 
     PATH_TO_WATCH = folder.joinpath(args.path_to_watch).resolve()
     if not PATH_TO_WATCH.exists():
@@ -47,6 +47,7 @@ def interrupted_job(folder: Path,
 
 
     event_handler = CFDOutputFileHandler(PATH_TO_WATCH,
+                                         args.db_name,
                                          parent = os.getcwd(),
                                          max_workers = config.MAX_WORKERS_)
     observer = PollingObserver()
@@ -54,7 +55,7 @@ def interrupted_job(folder: Path,
     observer.start()
 
     runner = Runner(event_handler,observer)
-    runner.from_interrupted(SimulationDatabase(db_name))
+    runner.from_interrupted(SimulationDatabase(args.db_name))
 
 def main():
 
@@ -64,6 +65,7 @@ def main():
     parser.add_argument('folder',type = str)
     parser.add_argument('--path_to_watch',type = str,default = 'output',
                         help = '(Relative) Path to watch for new CFD output files')
+    parser.add_argument('--db_name',type = str,default = 'transient_db')
     parser.add_argument('--rmode',type = str,default = 'continue')
     parser.add_argument('--smode',type = str,default = 'running')
     parser.add_argument('--debug',action = 'store_true',help="Enable debug mode.")
