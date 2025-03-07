@@ -17,7 +17,7 @@ from linearization_lib.linearization.vinterp import interpolate_nodal_temperatur
 
 from ansyscts.miscutil import _safe_read_csv_file, _safe_file_copy, _try_to_delete_file
 from ansyscts.post import post_process_directory
-from ansyscts.config import DEBUG_
+from ansyscts.config import DEBUG_,ACCOUNT_,QUEUE_
 import datetime
 
 import logging
@@ -33,14 +33,18 @@ APDL_SCRIPTS_FOLDER = Path(__file__).parent.parent.resolve().joinpath('apdl_scri
 
 class SlurmJob(ABC):
 
+    _defaults = {}
     def __init__(self,name: str,
                       client: Client = None,
-                      cluster: SLURMCluster = None):
+                      cluster: SLURMCluster = None,
+                      **resource_kwargs):
          
         self.name = name
         self.client = client
         self.cluster = cluster
         self.future = None
+        self.resource_kwargs = resource_kwargs
+        self.parse_resource_kwargs()
     
     def __str__(self):
         return self.name + '_' + str(self.client) + '_' + str(self.cluster)
@@ -82,6 +86,17 @@ class SlurmJob(ABC):
                 self.cluster.close()
         except Exception as e:
             logger.error(f"Error during killing jobs for {self.name}: {e}")
+
+    def parse_resource_kwargs(self):
+        for key,value in self._defaults.items():
+            if key not in self.resource_kwargs:
+                self.resource_kwargs[key] = value
+        
+        self.resource_kwargs['account'] = ACCOUNT_  
+        self.resource_kwargs['queue'] = QUEUE_
+
+        if DEBUG_:
+            logging.info(f"Resource kwargs for {self.name}: {self.resource_kwargs}")
 
 def make_new_slurm_cluster_client(name: str,
                                   queue = 'inferno',
@@ -168,11 +183,15 @@ def preprocess_cfd_output(cfd_input_file: Path,
 
 class StructuralAnalysisJob(SlurmJob):
 
+    _defaults = {'memory':'128GB','walltime':'03:00:00','cores':24}
+
     def __init__(self,name: str,
                     client: Client = None,
                     cluster: SLURMCluster = None,
-                    parent_dir: Path = None):
-        super().__init__(name,client,cluster)
+                    parent_dir: Path = None,
+                    **resource_kwargs):
+        
+        super().__init__(name,client,cluster,**resource_kwargs)
         parent_dir = Path(os.getcwd()) if parent_dir is None else parent_dir
         if not DEBUG_:
             self.dir = TemporaryDirectory(dir=str(parent_dir))
@@ -186,10 +205,8 @@ class StructuralAnalysisJob(SlurmJob):
         ]
         
         self.cluster,self.client = make_new_slurm_cluster_client(self.name,
-                                                    cores=24,
-                                                    memory='128GB',
-                                                    walltime='03:00:00',
-                                                    additional_directives = additional_directives)
+                                                    additional_directives = additional_directives,
+                                                    **self.resource_kwargs)
     
     def run(self,   interpolated_temperature_file: Path,
                     result_path: Path) -> bool:
@@ -236,11 +253,11 @@ class StructuralAnalysisJob(SlurmJob):
     
 class PreProcessCFDOutputJob(SlurmJob):
 
+    _defaults = {'memory':'16GB','walltime':'00:10:00','cores':24}
+
     def make_client(self):
         self.cluster,self.client = make_new_slurm_cluster_client(self.name,
-                                                    cores=12,
-                                                    memory='16GB',
-                                                    walltime='00:10:00')
+                                                    **self.resource_kwargs)
         
         
     def run(self, cfd_input_file: Path, outputfile: Path) -> bool:    
@@ -248,11 +265,11 @@ class PreProcessCFDOutputJob(SlurmJob):
 
 class PostProcess(SlurmJob):
 
+    _defaults = {'memory':'64GB','walltime':'01:30:00','cores':24}
+
     def make_client(self):
         self.cluster,self.client = make_new_slurm_cluster_client(self.name,
-                                                    cores=24,
-                                                    memory='64GB',
-                                                    walltime='01:30:00')
+                                                    **self.resource_kwargs)
     
     def get_flow_time_from_report_file(self,report_file: Path,
                                             time_step: int) -> int:
