@@ -1,0 +1,17 @@
+!MPTSN
+!arg1 - the file name to read pressure data from
+!arg2 - the component name to map the data to 
+!nodes must already be selected
+
+!------------------------------
+! enter mapping interface
+!------------------------------
+
+/MAP
+
+!specify file type and pressure type for subsequent import
+FTYPE,CSV,0
+READ,arg1,1,,1,2,3,4
+TARGET,arg2
+
+FINISH

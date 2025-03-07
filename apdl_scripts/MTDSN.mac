@@ -1,0 +1,44 @@
+/UIS,MSGPOP,1
+
+/PREP7
+
+!-----------------------------------------------------
+!Read in temperature data interpolated to node numbers
+!-----------------------------------------------------
+
+skiplines = 1									!skip header of file
+/INQUIRE,numlines, LINES,arg1,arg2				!get number of lines in file
+*DEL,_data,,NOPR
+*DIM,_data,TABLE,numlines -skiplines			!allocate table so we can use the superior "TREAD" command
+*TREAD,_data,arg1,arg2,,skiplines				!read data into table
+
+!---------------
+!Allocate arrays
+!---------------
+
+*DEL,extnode,,NOPR
+*DIM,extnode,ARRAY,numlines - skiplines			!allocate array for node values of field data
+*DEL,extdat,,NOPR					
+*DIM,extdat,ARRAY,numlines -skiplines
+
+!copy node values to array
+*vfun,extnode(1),copy,_data(1,0)
+
+!copy external values to array
+*vfun,extdat(1),copy,_data(1,1)
+
+!delete unncessary variables
+*DEL,_data
+
+
+!-----------------------
+!Assign temperature values to body forces
+!-----------------------
+*DO,i,1,numlines - skiplines
+	BF,extnode(i),TEMP,extdat(i) - 273.15
+*ENDDO
+
+!*DEL,numlines
+!*DEL,extnode,,NOPR
+!*DEL,extdat,,NOPR
+!*DEL,skiplines

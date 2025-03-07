@@ -1,0 +1,27 @@
+!write selected nodal positions to file
+!specified by the arg1 parameter with extension specified by
+!arg2
+
+/post1
+
+*GET,ncount,NODE,,COUNT				!get number of selected nodes
+*GET,nmax,NODE,,NUM,MAX				!get highest number of nodes in selected component
+
+*DIM,table1,array,nmax,5			!allocate array for reading in locations
+*VGET,table1(1,1),NODE,,NSEL		!Create masked array for selected component nodes
+*VFILL,table1(1,2),RAMP,1,1			!Index Nodes
+*VGET,table1(1,3),NODE,,LOC,X 		!Get X locations
+*VGET,table1(1,4),NODE,,LOC,Y		!Get Y locations
+*VGET,table1(1,5),NODE,,LOC,Z		!Get Z locations
+
+!write to file
+*CFOPEN,arg1,arg2
+*VMASK,table1(1,1)
+*VWRITE,table1(1,2),',',table1(1,3),',',table1(1,4),',',table1(1,5)
+(F10.0,A1,F15.10,A1,F15.10,A1,F15.10)
+*CFCLOS
+
+*DEL,table1
+*DEL,ncount
+*DEL,nmax
+FINISH

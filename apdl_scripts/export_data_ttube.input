@@ -1,0 +1,94 @@
+!========================
+!Csonfiguration variables
+!========================
+/UIS,MSGPOP,1
+
+!input file name
+INPUT_FILE = 'ttube_half'
+INPUT_EXT = 'dat'
+
+
+!========================
+!Program Logic
+!========================
+
+!-------------------------
+! (1) Read input
+!-------------------------
+!read input file
+/input,INPUT_FILE,INPUT_EXT,,, 0 
+
+
+!-----------------------------
+! (2) Read & Map Thermal Loads
+!-----------------------------
+!map temperatures to thimble material point
+cmsel,s,'temp_scope'
+nsle,s,active
+mtdsn,'interpolated_temperatures','csv'
+
+!-------------------------
+!(3) Solve Model
+!-------------------------
+
+esel,all
+nsel,all
+/sol
+/status,solu
+solve  
+finish
+/post1
+set,first
+
+!---------------------------------------
+! (4) Export Boundary Nodal Information 
+!---------------------------------------
+!get pressure boundary bottom surface
+
+!end cap 
+cmsel,s,end_cap_inner
+wsnpos,'end_cap.face1.node','loc'
+
+cmsel,s,end_cap_outer
+wsnpos,'end_cap.face2.node','loc'
+
+!outer tube shell
+cmsel,s,tube_inner
+wsnpos,'shell.face1.node','loc'
+
+cmsel,s,tube_outer
+wsnpos,'shell.face2.node','loc'
+
+!outer tube exit
+cmsel,s,outlet_inner
+wsnpos,'outlet.face1.node','loc'
+
+cmsel,s,outlet_outer
+wsnpos,'outlet.face2.node','loc'
+
+!-----------------------------------
+! (5) Export Parts Information
+!-----------------------------------
+!get end cap nodes
+cmsel,s,end_cap
+nsle,s,active
+nsle,u,mid
+wsnpos,'end_cap.node','loc'
+wsnssol,'end_cap.node','dat'
+wsntemp,'end_cap.node','cfdtemp'
+
+!get shell cap nodes
+cmsel,s,outer_tube_shell
+nsle,s,active
+nsle,u,mid
+wsnpos,'shell.node','loc'
+wsnssol,'shell.node','dat'
+wsntemp,'shell.node','cfdtemp'
+
+!get lower outer tube
+cmsel,s,lower_outer_tube
+nsle,s,active
+nsle,u,mid
+wsnpos,'outlet.node','loc'
+wsnssol,'outlet.node','dat'
+wsntemp,'outlet.node','cfdtemp'

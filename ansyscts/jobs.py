@@ -24,7 +24,7 @@ logger = logging.getLogger("ansyscts")
 
 _PARENT = Path(os.getcwd())
 TTUBE_NODE_FILE = _PARENT.joinpath('ttube.node.loc')
-APDL_SCRIPTS_FOLDER = _PARENT.joinpath('apdl_scripts')
+APDL_SCRIPTS_FOLDER = Path(__file__).parent.resolve().joinpath('apdl_scripts')
 
 class SlurmJob(ABC):
 

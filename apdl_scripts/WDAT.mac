@@ -1,0 +1,8 @@
+/post1
+
+*CFOPEN,arg1,'dat'
+
+*VWRITE,nmapped(1,1)
+(E25.15)
+
+*CFCLOS
