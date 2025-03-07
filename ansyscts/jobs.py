@@ -133,7 +133,13 @@ def run_apdl_shell_command(temp_dir: Path,
     cmds = ['module load ansys/2023R1',
             f"ansys231 -s noread -smp -np $SLURM_NTASKS -b < export_data_ttube.input > apdl.out 2>&1"]
     
-    result = subprocess.run('\n'.join(cmds), shell=True, cwd = str(temp_dir))
+    result = subprocess.run('\n'.join(cmds), shell=True, cwd = str(temp_dir),
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,text = True)
+    if result.returncode != 0:
+        logger.error(f'Running APDL command failed with return code {result.returncode}')
+        logger.error(f"stderr:  {result.stderr}")
+        logger.error(f"stdout:  {result.stdout}")
+    
     save_apdl_outputs(temp_dir, result_dir)
     os.chdir(curr_dir)  # Change back to the original directory
     return result.returncode == 0
@@ -167,7 +173,7 @@ class StructuralAnalysisJob(SlurmJob):
                     cluster: SLURMCluster = None,
                     parent_dir: Path = None):
         super().__init__(name,client,cluster)
-        parent_dir = Path(__file__).parent if parent_dir is None else parent_dir
+        parent_dir = Path(os.getcwd()) if parent_dir is None else parent_dir
         if not DEBUG_:
             self.dir = TemporaryDirectory(dir=str(parent_dir))
         else:
@@ -206,6 +212,11 @@ class StructuralAnalysisJob(SlurmJob):
         #copy the interpolated temperature file to the temp directory
         if not _safe_file_copy(interpolated_temperature_file,_temp_path.joinpath('interpolated_temperatures.csv')):
             logger.error(f'Could not copy interpolated temperature file {str(interpolated_temperature_file)} to temp directory')
+            return False
+        
+        #copy the Tube data file to the temp directory
+        if not _safe_file_copy(TTUBE_DAT_FILE,_temp_path.joinpath('ttube_half.dat')):
+            logger.error(f'Could not copy TTUBE data file {str(TTUBE_DAT_FILE)} to temp directory')
             return False
         
         #copy the files to the temp directory to run in a local directory.

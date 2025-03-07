@@ -7,6 +7,7 @@ from pathlib import Path
 from watchdog.observers.polling import PollingObserver
 import datetime
 import ansyscts.config as config
+import os
 
 logger = logging.getLogger("ansyscts")
 
@@ -23,7 +24,9 @@ def running_job(folder: Path,
     
     logger.info(f'Watching {PATH_TO_WATCH} for new CFD output files')
 
-    event_handler = CFDOutputFileHandler(PATH_TO_WATCH)
+    event_handler = CFDOutputFileHandler(PATH_TO_WATCH,
+                                         parent = os.getcwd(),
+                                         max_workers = config.MAX_WORKERS_)
     observer = PollingObserver()
     observer.schedule(event_handler, str(PATH_TO_WATCH), recursive=True)
     observer.start()
@@ -44,7 +47,9 @@ def interrupted_job(folder: Path,
     logger.info(f'Continued process of files in {PATH_TO_WATCH}')
 
 
-    event_handler = CFDOutputFileHandler(PATH_TO_WATCH)
+    event_handler = CFDOutputFileHandler(PATH_TO_WATCH,
+                                         parent = os.getcwd(),
+                                         max_workers = config.MAX_WORKERS_)
     observer = PollingObserver()
     observer.schedule(event_handler, str(PATH_TO_WATCH), recursive=True)
     observer.start()
@@ -63,6 +68,7 @@ def main():
     parser.add_argument('--rmode',type = str,default = 'continue')
     parser.add_argument('--smode',type = str,default = 'running')
     parser.add_argument('--debug',action = 'store_true',help="Enable debug mode.")
+    parser.add_argument('--max_workers',type = int,default = 5,help = 'Maximum number of workers for the thread pool')
     
     args = parser.parse_args()
     assert args.smode in {'running','interrupted'}, 'mode must be either running or interrupted'
@@ -70,6 +76,7 @@ def main():
     
     config.DEBUG_ = args.debug  
     config.RUN_MODE_ = args.rmode
+    config.MAX_WORKERS_ = args.max_workers
 
     #check if folder exists
     folder = Path(args.folder).resolve()
