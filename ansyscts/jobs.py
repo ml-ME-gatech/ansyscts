@@ -296,9 +296,10 @@ class PostProcess(SlurmJob):
                    interpolated_temperature_file: Path,
                    time_step: int,
                    db_name: str | Path,
+                   report_file: Path,
                    delete_intermediate_files: bool = False) -> bool:
         
-        flow_time = self.get_flow_time_from_report_file('report-file-0.out',time_step)
+        flow_time = self.get_flow_time_from_report_file(report_file,time_step)
 
         post =  self._run(post_process_directory,structural_results_folder,str(time_step),
                          cfd_output_file,

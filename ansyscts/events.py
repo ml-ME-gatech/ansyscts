@@ -92,8 +92,8 @@ class CFDOutputFileHandler(FileSystemEventHandler):
                 #Post Processing
                 logger.info('Post-processing structural results')
                 post_process = PostProcess('post_process - '+file.stem)
-
-                if not self.run(post_process,struct_results_folder,file,interp_file,time_step,self.db_name):
+                rfile = self.folder.joinpath(config.REPORT_FILE_NAME_)
+                if not self.run(post_process,struct_results_folder,file,interp_file,time_step,self.db_name,rfile):
                     self.error_process(f"Post-processing of structural file {file} failed")
                 
                 logger.info(f"Analysis of {file} completed successfully")

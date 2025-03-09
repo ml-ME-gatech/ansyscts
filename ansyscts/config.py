@@ -6,6 +6,7 @@ MAX_WORKERS_ = 5                #maximum number of workers for the thread pool
 CHECK_INTERVAL_ = 0.5           #interval to check for file completion in seconds
 FILE_WAIT_RETRIES_ = 600        #number of retries to check for file completion
 FILE_WAIT_INTERVAL_ = 1.0       #interval to check for file completion in seconds
+REPORT_FILE_NAME_ = 'report-file-0.out' #name of the report file
 
 #config for slurm
 ACCOUNT_ = 'gts-my14-paid'      #account to charge

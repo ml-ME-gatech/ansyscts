@@ -72,7 +72,9 @@ def main():
     parser.add_argument('--max_workers',type = int,default = 5,help = 'Maximum number of workers for the thread pool')
     parser.add_argument('--queue',type = str,default = 'inferno',help = 'Queue to submit jobs to')
     parser.add_argument('--account',type = str,default = 'gts-my14-paid',help = 'Account to charge')
-    
+    parser.add_argument('--flrfile',type = str,default = 'report-file-0.out',
+                        help = 'name of the the fluent report file')
+
     args = parser.parse_args()
     assert args.smode in {'running','interrupted'}, 'mode must be either running or interrupted'
     assert args.rmode in {'continue','restart'}, 'mode must be either continue or restart'
@@ -82,6 +84,7 @@ def main():
     config.MAX_WORKERS_ = args.max_workers
     config.QUEUE_ = args.queue
     config.ACCOUNT_ = args.account
+    config.REPORT_FILE_NAME_ = args.flrfile
 
     #check if folder exists
     folder = Path(args.folder).resolve()
