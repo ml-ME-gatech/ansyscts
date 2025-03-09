@@ -5,7 +5,7 @@ import sys
 import shutil
 import os
 import logging
-from config import FILE_WAIT_INTERVAL_, FILE_WAIT_RETRIES_
+from ansyscts.config import FILE_WAIT_INTERVAL_, FILE_WAIT_RETRIES_
 
 logger = logging.getLogger("ansyscts")
 
