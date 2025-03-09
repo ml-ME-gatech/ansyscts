@@ -17,7 +17,7 @@ from linearization_lib.linearization.vinterp import interpolate_nodal_temperatur
 
 from ansyscts.miscutil import _safe_read_csv_file, _safe_file_copy, _try_to_delete_file
 from ansyscts.post import post_process_directory
-from ansyscts.config import DEBUG_,ACCOUNT_,QUEUE_
+import ansyscts.config as config
 import datetime
 
 import logging
@@ -85,24 +85,24 @@ class SlurmJob(ABC):
             if self.cluster:
                 self.cluster.close()
         except Exception as e:
-            logger.error(f"Error during killing jobs for {self.name}: {e}")
+            if 'IOLoop is closed' in str(e):
+                logger.debug(f"Cluster/Client already closed for {self.name}: {e}")
+            else:
+                logger.error(f"Error during killing jobs for {self.name}: {e}")
 
     def parse_resource_kwargs(self):
         for key,value in self._defaults.items():
             if key not in self.resource_kwargs:
                 self.resource_kwargs[key] = value
         
-        self.resource_kwargs['account'] = ACCOUNT_  
-        self.resource_kwargs['queue'] = QUEUE_
+        self.resource_kwargs['account'] = config.ACCOUNT_  
+        self.resource_kwargs['queue'] = config.QUEUE_
 
-        if DEBUG_:
+        if config.DEBUG_:
             kwargs_str = '\n'.join([f'{k}: {v}' for k,v in self.resource_kwargs.items()])
             logging.info(f"Resource kwargs for {self.name}: \n {kwargs_str}")
 
-    def __del__(self):
-        self.kill()
-    
-    
+
 def make_new_slurm_cluster_client(name: str,
                                   queue = 'inferno',
                                   account = 'gts-my14',   
@@ -198,7 +198,7 @@ class StructuralAnalysisJob(SlurmJob):
         
         super().__init__(name,client,cluster,**resource_kwargs)
         parent_dir = Path(os.getcwd()) if parent_dir is None else parent_dir
-        if not DEBUG_:
+        if not config.DEBUG_:
             self.dir = TemporaryDirectory(dir=str(parent_dir))
         else:
             timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -251,7 +251,7 @@ class StructuralAnalysisJob(SlurmJob):
         success = self._run(run_apdl_shell_command,_temp_path,result_path)
         
         #clean up the temp directory if process executed normally, otherwise, need to save
-        if success and not DEBUG_:
+        if success and not config.DEBUG_:
             self.dir.cleanup()
         
         return success

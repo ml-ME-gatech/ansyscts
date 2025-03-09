@@ -10,7 +10,7 @@ from sim_datautil.sim_datautil.dutil import SimulationDatabase
 from ansyscts.jobs import PreProcessCFDOutputJob, StructuralAnalysisJob, PostProcess, SlurmJob
 from ansyscts.miscutil import _parse_fluent_output_filename, _is_file_complete, _safe_file_copy, _exit_error
 import logging
-from ansyscts.config import RUN_MODE_, CHECK_INTERVAL_
+import ansyscts.config as config
 
 logger = logging.getLogger("ansyscts")
 
@@ -44,12 +44,12 @@ class CFDOutputFileHandler(FileSystemEventHandler):
         except Exception as e:
             self.error_process(f"Error running job {job}: {str(e)}")
         finally: 
-            self.running_jobs.pop(key)
+            self.running_jobs.pop(key,None)
         
         return results
     
     def error_process(self, msg: str):
-        if RUN_MODE_ == 'restart':
+        if config.RUN_MODE_ == 'restart':
             _exit_error(msg)
         else:
             logger.error(msg)
@@ -147,7 +147,7 @@ class Runner:
         self.observer.join()
         sys.exit(0)
         
-    def run(self, wait: float = CHECK_INTERVAL_):
+    def run(self, wait: float = config.CHECK_INTERVAL_):
         try:
             while True:
                 time.sleep(wait)
