@@ -121,12 +121,19 @@ class CFDOutputFileHandler(FileSystemEventHandler):
         """
         Restart the CFDOutputFileHandler from an interrupted state
         """
+        if self.executor._shutdown:
+            logger.error("Executor is already shut down; cannot restart interrupted jobs.")
+            return
+    
         logger.info('Restarting CFDOutputFileHandler from interrupted state')
         for file in self.folder.iterdir():
             time_step = _parse_fluent_output_filename(file)
-            if str(time_step) not in db.keys():
+            if str(time_step) not in db.keys() and self._is_cfd_file(file):
                 logger.info(f"Restarting analysis of file {file}")
-                self.executor.submit(self.process_file,file)
+                try:
+                    self.executor.submit(self.process_file,file)
+                except Exception as e:
+                    logger.error(f"Error submitting job for file {file}: {str(e)}")
 
 class Runner:
 
@@ -140,7 +147,7 @@ class Runner:
 
     def termination_handler(self,signal_received,frame):
         logger.info(f"Received shutdown signal ({signal_received}). Initiating graceful shutdown.")
-        self.event_handler.shutdown()  # Shutdown ThreadPool and running jobs
+        self.event_handler.shutdown(wait = False)  # Shutdown ThreadPool and running jobs
         self.observer.stop()           # Stop the filesystem observer
         # Optionally wait for the observer to finish if needed
         self.observer.join()
@@ -160,6 +167,8 @@ class Runner:
     def from_interrupted(self, db: SimulationDatabase):
         try:
             self.event_handler.from_interrupted(db)
+            self.event_handler.executor.shutdown(wait=True)
+            self.observer.join()
         except KeyboardInterrupt:
             logger.info('Keyboard interrupt received, stopping execution for interrupted files')
             self.termination_handler(signal.SIGINT, None) 
