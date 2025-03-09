@@ -65,7 +65,7 @@ def main():
     parser.add_argument('folder',type = str)
     parser.add_argument('--path_to_watch',type = str,default = 'output',
                         help = '(Relative) Path to watch for new CFD output files')
-    parser.add_argument('--db_name',type = str,default = 'transient_db')
+    parser.add_argument('--db_name',type = str,default = None)
     parser.add_argument('--rmode',type = str,default = 'continue')
     parser.add_argument('--smode',type = str,default = 'running')
     parser.add_argument('--debug',action = 'store_true',help="Enable debug mode.")
@@ -89,6 +89,9 @@ def main():
         raise FileNotFoundError(f'Folder {folder} does not exist')
     elif not folder.is_dir():
         raise NotADirectoryError(f'{folder} is not a directory')
+    
+    if args.db_name is None:
+        args.db_name = Path(os.getcwd()).joinpath('transient_db').resolve()
     
     #setup logging
     timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
