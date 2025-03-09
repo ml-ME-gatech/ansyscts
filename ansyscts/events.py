@@ -92,7 +92,7 @@ class CFDOutputFileHandler(FileSystemEventHandler):
                 #Post Processing
                 logger.info('Post-processing structural results')
                 post_process = PostProcess('post_process - '+file.stem)
-                rfile = self.folder.joinpath(config.REPORT_FILE_NAME_)
+                rfile = self.parent.joinpath(config.REPORT_FILE_NAME_)
                 if not self.run(post_process,struct_results_folder,file,interp_file,time_step,self.db_name,rfile):
                     self.error_process(f"Post-processing of structural file {file} failed")
                 
@@ -132,6 +132,7 @@ class CFDOutputFileHandler(FileSystemEventHandler):
                 logger.info(f"Restarting analysis of file {file}")
                 try:
                     self.executor.submit(self.process_file,file)
+                    time.sleep(config.CLUSTER_DELAY_)       #wait a bit after starting job
                 except Exception as e:
                     logger.error(f"Error submitting job for file {file}: {str(e)}")
 
