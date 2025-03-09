@@ -148,7 +148,7 @@ class Runner:
 
     def termination_handler(self,signal_received,frame):
         logger.info(f"Received shutdown signal ({signal_received}). Initiating graceful shutdown.")
-        self.event_handler.shutdown(wait = False)  # Shutdown ThreadPool and running jobs
+        self.event_handler.shutdown()  # Shutdown ThreadPool and running jobs
         self.observer.stop()           # Stop the filesystem observer
         # Optionally wait for the observer to finish if needed
         self.observer.join()
