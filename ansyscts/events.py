@@ -106,8 +106,6 @@ class CFDOutputFileHandler(FileSystemEventHandler):
             return True
 
     def shutdown(self):
-        self.executor.shutdown(wait=True)
-
         logger.info('Killing running jobs')
         for name,job in self.running_jobs.items():
             try:
@@ -116,6 +114,7 @@ class CFDOutputFileHandler(FileSystemEventHandler):
             except Exception as e:
                 logger.error(f"Error killing job {name}: {str(e)}")
 
+        self.executor.shutdown(wait=False)
         logger.info('Shut down CFD output file handler')
 
     def from_interrupted(self, db: SimulationDatabase):
