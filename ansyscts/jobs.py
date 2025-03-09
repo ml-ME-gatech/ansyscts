@@ -99,6 +99,10 @@ class SlurmJob(ABC):
             kwargs_str = '\n'.join([f'{k}: {v}' for k,v in self.resource_kwargs.items()])
             logging.info(f"Resource kwargs for {self.name}: \n {kwargs_str}")
 
+    def __del__(self):
+        self.kill()
+    
+    
 def make_new_slurm_cluster_client(name: str,
                                   queue = 'inferno',
                                   account = 'gts-my14',   
