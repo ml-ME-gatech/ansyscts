@@ -25,7 +25,7 @@ def running_job(folder: Path,
 
     event_handler = CFDOutputFileHandler(PATH_TO_WATCH,
                                          args.db_name,
-                                         parent = os.getcwd(),
+                                         parent = folder,
                                          max_workers = config.MAX_WORKERS_)
     observer = PollingObserver()
     observer.schedule(event_handler, str(PATH_TO_WATCH), recursive=True)
@@ -48,7 +48,7 @@ def interrupted_job(folder: Path,
 
     event_handler = CFDOutputFileHandler(PATH_TO_WATCH,
                                          args.db_name,
-                                         parent = os.getcwd(),
+                                         parent = folder,
                                          max_workers = config.MAX_WORKERS_)
     observer = PollingObserver()
     observer.schedule(event_handler, str(PATH_TO_WATCH), recursive=True)
