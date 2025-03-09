@@ -5,7 +5,7 @@ RUN_MODE_ = 'restart'
 MAX_WORKERS_ = 5
 
 #config for slurm
-ACCOUNT_ = 'gt-my14-paid'
+ACCOUNT_ = 'gts-my14-paid'
 QUEUE_ = 'inferno'
 
 #resources for slurm

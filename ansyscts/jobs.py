@@ -96,7 +96,8 @@ class SlurmJob(ABC):
         self.resource_kwargs['queue'] = QUEUE_
 
         if DEBUG_:
-            logging.info(f"Resource kwargs for {self.name}: {self.resource_kwargs}")
+            kwargs_str = '\n'.join([f'{k}: {v}' for k,v in self.resource_kwargs.items()])
+            logging.info(f"Resource kwargs for {self.name}: \n {kwargs_str}")
 
 def make_new_slurm_cluster_client(name: str,
                                   queue = 'inferno',
