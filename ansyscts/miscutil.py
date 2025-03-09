@@ -5,6 +5,7 @@ import sys
 import shutil
 import os
 import logging
+from config import FILE_WAIT_INTERVAL_, FILE_WAIT_RETRIES_
 
 logger = logging.getLogger("ansyscts")
 
@@ -16,8 +17,8 @@ def _try_to_delete_file(file: str):
         logger.warning(str(fe))
 
 def _is_file_complete(file_path: Path,
-                      check_interval = 1.0,
-                      retries = 600) -> bool:
+                      check_interval = FILE_WAIT_INTERVAL_,
+                      retries = FILE_WAIT_RETRIES_) -> bool:
     
     #helper/checker file to make sure that the file is not being written to
     #while we are trying to read it

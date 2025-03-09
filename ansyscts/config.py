@@ -1,12 +1,15 @@
 
 #config for ansyscts
-DEBUG_ = False
-RUN_MODE_ = 'restart'
-MAX_WORKERS_ = 5
+DEBUG_ = False                  #set to True for debugging
+RUN_MODE_ = 'restart'           #set to 'continue' for continuing executation on errors. Set the "restart" to force exit on errors
+MAX_WORKERS_ = 5                #maximum number of workers for the thread pool
+CHECK_INTERVAL_ = 0.5           #interval to check for file completion in seconds
+FILE_WAIT_RETRIES_ = 600        #number of retries to check for file completion
+FILE_WAIT_INTERVAL_ = 1.0       #interval to check for file completion in seconds
 
 #config for slurm
-ACCOUNT_ = 'gts-my14-paid'
-QUEUE_ = 'inferno'
+ACCOUNT_ = 'gts-my14-paid'      #account to charge
+QUEUE_ = 'inferno'              #queue to submit jobs to
 
 #resources for slurm
 

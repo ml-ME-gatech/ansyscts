@@ -10,7 +10,7 @@ from sim_datautil.sim_datautil.dutil import SimulationDatabase
 from ansyscts.jobs import PreProcessCFDOutputJob, StructuralAnalysisJob, PostProcess, SlurmJob
 from ansyscts.miscutil import _parse_fluent_output_filename, _is_file_complete, _safe_file_copy, _exit_error
 import logging
-from ansyscts.config import RUN_MODE_
+from ansyscts.config import RUN_MODE_, CHECK_INTERVAL_
 
 logger = logging.getLogger("ansyscts")
 
@@ -147,7 +147,7 @@ class Runner:
         self.observer.join()
         sys.exit(0)
         
-    def run(self, wait: float = 0.5):
+    def run(self, wait: float = CHECK_INTERVAL_):
         try:
             while True:
                 time.sleep(wait)
