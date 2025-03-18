@@ -1,6 +1,5 @@
 import argparse
 
-import dask.config
 import ansyscts.config as config
 
 #basic argument parsing and checking

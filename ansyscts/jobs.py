@@ -186,7 +186,7 @@ def preprocess_cfd_output(cfd_input_file: Path,
 
 class StructuralAnalysisJob(SlurmJob):
 
-    _defaults = {'memory':'128GB','walltime':'03:00:00','cores':24}
+    _defaults = {'memory':'128GB','walltime':'04:00:00','cores':24}
 
     def __init__(self,name: str,
                     client: Client = None,
@@ -256,7 +256,7 @@ class StructuralAnalysisJob(SlurmJob):
     
 class PreProcessCFDOutputJob(SlurmJob):
 
-    _defaults = {'memory':'16GB','walltime':'00:10:00','cores':24}
+    _defaults = {'memory':'32GB','walltime':'00:20:00','cores':24}
 
     def make_client(self):
         self.cluster,self.client = make_new_slurm_cluster_client(self.name,
@@ -268,7 +268,7 @@ class PreProcessCFDOutputJob(SlurmJob):
 
 class PostProcess(SlurmJob):
 
-    _defaults = {'memory':'64GB','walltime':'01:30:00','cores':24}
+    _defaults = {'memory':'64GB','walltime':'02:00:00','cores':24}
 
     def make_client(self):
         self.cluster,self.client = make_new_slurm_cluster_client(self.name,
