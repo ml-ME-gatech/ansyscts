@@ -1,12 +1,50 @@
-import logging
 import argparse
+
+import dask.config
+import ansyscts.config as config
+
+#basic argument parsing and checking
+parser = argparse.ArgumentParser()
+parser.add_argument('folder',type = str)
+parser.add_argument('--path_to_watch',type = str,default = 'output',
+                    help = '(Relative) Path to watch for new CFD output files')
+parser.add_argument('--db_name',type = str,default = None)
+parser.add_argument('--rmode',type = str,default = 'continue')
+parser.add_argument('--smode',type = str,default = 'running')
+parser.add_argument('--debug',action = 'store_true',help="Enable debug mode.")
+parser.add_argument('--max_workers',type = int,default = 5,help = 'Maximum number of workers for the thread pool')
+parser.add_argument('--queue',type = str,default = 'inferno',help = 'Queue to submit jobs to')
+parser.add_argument('--account',type = str,default = 'gts-my14-paid',help = 'Account to charge')
+parser.add_argument('--flrfile',type = str,default = 'report-file-0.out',
+                    help = 'name of the the fluent report file')
+parser.add_argument('--dask_timeout',type = str,default = 3600,
+                    help = 'Timeout for dask client in seconds')
+parser.add_argument('--dask_allowed_failures',type = int,default = 5)
+
+args = parser.parse_args()
+assert args.smode in {'running','interrupted'}, 'mode must be either running or interrupted'
+assert args.rmode in {'continue','restart'}, 'mode must be either continue or restart'
+
+config.DEBUG_ = args.debug  
+config.RUN_MODE_ = args.rmode
+config.MAX_WORKERS_ = args.max_workers
+config.QUEUE_ = args.queue
+config.ACCOUNT_ = args.account
+config.REPORT_FILE_NAME_ = args.flrfile
+config.DASK_TIMEOUT_ = args.dask_timeout
+config.DASK_ALLOWED_FAILURES_ = args.dask_allowed_failures
+import dask
+dask.config.set({"distributed.dashboard.enabled": False})
+dask.config.set({"distributed.worker.start_timeout": config.DASK_TIMEOUT_})
+dask.config.set({"distributed.scheduler.allowed-failures": config.DASK_ALLOWED_FAILURES_})
+
+import logging
 from ansyscts.events import CFDOutputFileHandler, Runner
 from sim_datautil.sim_datautil.dutil import SimulationDatabase
 from ansyscts.miscutil import _exit_error
 from pathlib import Path
 from watchdog.observers.polling import PollingObserver
 import datetime
-import ansyscts.config as config
 import os
 
 logger = logging.getLogger("ansyscts")
@@ -58,33 +96,6 @@ def interrupted_job(folder: Path,
     runner.from_interrupted(SimulationDatabase(args.db_name))
 
 def main():
-
-    #basic argument parsing and checking
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument('folder',type = str)
-    parser.add_argument('--path_to_watch',type = str,default = 'output',
-                        help = '(Relative) Path to watch for new CFD output files')
-    parser.add_argument('--db_name',type = str,default = None)
-    parser.add_argument('--rmode',type = str,default = 'continue')
-    parser.add_argument('--smode',type = str,default = 'running')
-    parser.add_argument('--debug',action = 'store_true',help="Enable debug mode.")
-    parser.add_argument('--max_workers',type = int,default = 5,help = 'Maximum number of workers for the thread pool')
-    parser.add_argument('--queue',type = str,default = 'inferno',help = 'Queue to submit jobs to')
-    parser.add_argument('--account',type = str,default = 'gts-my14-paid',help = 'Account to charge')
-    parser.add_argument('--flrfile',type = str,default = 'report-file-0.out',
-                        help = 'name of the the fluent report file')
-
-    args = parser.parse_args()
-    assert args.smode in {'running','interrupted'}, 'mode must be either running or interrupted'
-    assert args.rmode in {'continue','restart'}, 'mode must be either continue or restart'
-    
-    config.DEBUG_ = args.debug  
-    config.RUN_MODE_ = args.rmode
-    config.MAX_WORKERS_ = args.max_workers
-    config.QUEUE_ = args.queue
-    config.ACCOUNT_ = args.account
-    config.REPORT_FILE_NAME_ = args.flrfile
 
     #check if folder exists
     folder = Path(args.folder).resolve()
