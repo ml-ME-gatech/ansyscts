@@ -1,6 +1,8 @@
 import argparse
 
 import ansyscts.config as config
+import logging
+
 
 #basic argument parsing and checking
 parser = argparse.ArgumentParser()
@@ -33,6 +35,29 @@ config.REPORT_FILE_NAME_ = args.flrfile
 config.DASK_TIMEOUT_ = args.dask_timeout
 config.DASK_ALLOWED_FAILURES_ = args.dask_allowed_failures
 
+logger = logging.getLogger("ansyscts")
+folder = Path(args.folder).resolve()
+if not folder.exists():
+    raise FileNotFoundError(f'Folder {folder} does not exist')
+elif not folder.is_dir():
+    raise NotADirectoryError(f'{folder} is not a directory')
+
+if args.db_name is None:
+    args.db_name = Path(os.getcwd()).joinpath('transient_db').resolve()
+
+#setup logging
+timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+logging.basicConfig(filename = str(folder.joinpath(f'ansyscts-{timestamp}.log')),level = logging.INFO,
+                    format='%(asctime)s %(levelname)-8s %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S')
+
+logger.info(f'Starting coupled CFD-Structural simulation in folder {folder}')
+if config.DEBUG_:
+    logger.info('Debugging active')
+
+logger.info(f'Run mode: {config.RUN_MODE_}')   
+logger.info(f'Simulation mode: {args.smode}') 
+
 from dask import config as dask_config
 timeout_config = ["distributed.scheduler.idle-timeout",
                "distributed.scheduler.no-workers-timeout",
@@ -42,9 +67,14 @@ timeout_config = ["distributed.scheduler.idle-timeout",
 for toc in timeout_config:
     dask_config.set({toc: config.DASK_TIMEOUT_})
 
+if config.DEBUG_:
+    logger.info('Dask timeout configuration:')
+    for toc in timeout_config:
+        logger.info(f'{toc}:{dask_config.get(toc)}')
+
 dask_config.set({"distributed.scheduler.allowed-failures": config.DASK_ALLOWED_FAILURES_})
 
-import logging
+
 from ansyscts.events import CFDOutputFileHandler, Runner
 from sim_datautil.sim_datautil.dutil import SimulationDatabase
 from ansyscts.miscutil import _exit_error
@@ -53,7 +83,6 @@ from watchdog.observers.polling import PollingObserver
 import datetime
 import os
 
-logger = logging.getLogger("ansyscts")
 
 def running_job(folder: Path,
                 args: argparse.Namespace):
@@ -102,29 +131,6 @@ def interrupted_job(folder: Path,
     runner.from_interrupted(SimulationDatabase(args.db_name))
 
 def main():
-
-    #check if folder exists
-    folder = Path(args.folder).resolve()
-    if not folder.exists():
-        raise FileNotFoundError(f'Folder {folder} does not exist')
-    elif not folder.is_dir():
-        raise NotADirectoryError(f'{folder} is not a directory')
-    
-    if args.db_name is None:
-        args.db_name = Path(os.getcwd()).joinpath('transient_db').resolve()
-    
-    #setup logging
-    timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-    logging.basicConfig(filename = str(folder.joinpath(f'ansyscts-{timestamp}.log')),level = logging.INFO,
-                        format='%(asctime)s %(levelname)-8s %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S')
-    
-    logger.info(f'Starting coupled CFD-Structural simulation in folder {folder}')
-    if config.DEBUG_:
-        logger.info('Debugging active')
-
-    logger.info(f'Run mode: {config.RUN_MODE_}')   
-    logger.info(f'Simulation mode: {args.smode}') 
 
     #run the job
     if args.smode == 'running':
