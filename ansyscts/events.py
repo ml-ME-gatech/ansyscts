@@ -154,7 +154,7 @@ class Runner:
         self.observer.join()
         sys.exit(0)
         
-    def run(self, wait: float = config.CHECK_INTERVAL_):
+    def run(self, wait: float = config.CLUSTER_DELAY_):
         try:
             while True:
                 time.sleep(wait)

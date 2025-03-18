@@ -7,7 +7,7 @@ CHECK_INTERVAL_ = 0.5           #interval to check for file completion in second
 FILE_WAIT_RETRIES_ = 600        #number of retries to check for file completion
 FILE_WAIT_INTERVAL_ = 1.0       #interval to check for file completion in seconds
 REPORT_FILE_NAME_ = 'report-file-0.out' #name of the report file
-CLUSTER_DELAY_ = 1.0            #delay between job submissions in seconds
+CLUSTER_DELAY_ = 5.0            #delay between job submissions in seconds
 DASK_TIMEOUT_ = 3600            #timeout for dask client in seconds
 DASK_ALLOWED_FAILURES_ = 5      #number of allowed failures for dask client
 #config for slurm

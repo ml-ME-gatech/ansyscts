@@ -32,10 +32,17 @@ config.ACCOUNT_ = args.account
 config.REPORT_FILE_NAME_ = args.flrfile
 config.DASK_TIMEOUT_ = args.dask_timeout
 config.DASK_ALLOWED_FAILURES_ = args.dask_allowed_failures
-import dask
-dask.config.set({"distributed.dashboard.enabled": False})
-dask.config.set({"distributed.worker.start_timeout": config.DASK_TIMEOUT_})
-dask.config.set({"distributed.scheduler.allowed-failures": config.DASK_ALLOWED_FAILURES_})
+
+from dask import config as dask_config
+timeout_config = ["distributed.scheduler.idle-timeout",
+               "distributed.scheduler.no-workers-timeout",
+               "distributed.comm.timeout.connect",
+               "distributed.comm.timeouts.tcp",
+               "distributed.deploy.lost-worker-timeout"]
+for toc in timeout_config:
+    dask_config.set({toc: config.DASK_TIMEOUT_})
+
+dask_config.set({"distributed.scheduler.allowed-failures": config.DASK_ALLOWED_FAILURES_})
 
 import logging
 from ansyscts.events import CFDOutputFileHandler, Runner
