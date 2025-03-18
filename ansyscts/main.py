@@ -1,7 +1,7 @@
 import argparse
-
 import ansyscts.config as config
 import logging
+from pathlib import Path
 
 
 #basic argument parsing and checking
@@ -78,7 +78,6 @@ dask_config.set({"distributed.scheduler.allowed-failures": config.DASK_ALLOWED_F
 from ansyscts.events import CFDOutputFileHandler, Runner
 from sim_datautil.sim_datautil.dutil import SimulationDatabase
 from ansyscts.miscutil import _exit_error
-from pathlib import Path
 from watchdog.observers.polling import PollingObserver
 import datetime
 import os
