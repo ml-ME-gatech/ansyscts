@@ -2,7 +2,8 @@ import argparse
 import ansyscts.config as config
 import logging
 from pathlib import Path
-
+import os
+import datetime
 
 #basic argument parsing and checking
 parser = argparse.ArgumentParser()
@@ -79,8 +80,6 @@ from ansyscts.events import CFDOutputFileHandler, Runner
 from sim_datautil.sim_datautil.dutil import SimulationDatabase
 from ansyscts.miscutil import _exit_error
 from watchdog.observers.polling import PollingObserver
-import datetime
-import os
 
 
 def running_job(folder: Path,
