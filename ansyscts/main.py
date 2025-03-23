@@ -129,7 +129,12 @@ def interrupted_job(folder: Path,
     observer.start()
 
     runner = Runner(event_handler,observer)
-    runner.from_interrupted(SimulationDatabase(args.db_name))
+    create = False
+    if not os.path.exists(args.db_name):
+        logger.warning(f'Database {args.db_name} does not exist, creating')
+        create = True
+    
+    runner.from_interrupted(SimulationDatabase(args.db_name, create = create))
 
 def main():
 
