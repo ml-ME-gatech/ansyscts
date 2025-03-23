@@ -22,6 +22,8 @@ parser.add_argument('--flrfile',type = str,default = 'report-file-0.out',
 parser.add_argument('--dask_timeout',type = str,default = 3600,
                     help = 'Timeout for dask client in seconds')
 parser.add_argument('--dask_allowed_failures',type = int,default = 5)
+parser.add_argument('--fluent_report_file',type = str,default = 'report-file-0.out',
+                    help = 'Name of the fluent report file')
 
 args = parser.parse_args()
 assert args.smode in {'running','interrupted'}, 'mode must be either running or interrupted'
@@ -35,6 +37,7 @@ config.ACCOUNT_ = args.account
 config.REPORT_FILE_NAME_ = args.flrfile
 config.DASK_TIMEOUT_ = args.dask_timeout
 config.DASK_ALLOWED_FAILURES_ = args.dask_allowed_failures
+config.REPORT_FILE_NAME_ = args.fluent_report_file
 
 logger = logging.getLogger("ansyscts")
 folder = Path(args.folder).resolve()
