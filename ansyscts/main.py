@@ -1,3 +1,5 @@
+import time
+start_import = time.time()
 import argparse
 import ansyscts.config as config
 import logging
@@ -64,10 +66,10 @@ logger.info(f'Simulation mode: {args.smode}')
 
 from dask import config as dask_config
 timeout_config = ["distributed.scheduler.idle-timeout",
-               "distributed.scheduler.no-workers-timeout",
-               "distributed.comm.timeout.connect",
-               "distributed.comm.timeouts.tcp",
-               "distributed.deploy.lost-worker-timeout"]
+                "distributed.scheduler.no-workers-timeout",
+                "distributed.comm.timeout.connect",
+                "distributed.comm.timeouts.tcp",
+                "distributed.deploy.lost-worker-timeout"]
 for toc in timeout_config:
     dask_config.set({toc: config.DASK_TIMEOUT_})
 
@@ -78,12 +80,13 @@ if config.DEBUG_:
 
 dask_config.set({"distributed.scheduler.allowed-failures": config.DASK_ALLOWED_FAILURES_})
 
-
 from ansyscts.events import CFDOutputFileHandler, Runner
 from sim_datautil.sim_datautil.dutil import SimulationDatabase
 from ansyscts.miscutil import _exit_error
 from watchdog.observers.polling import PollingObserver
 
+if config.DEBUG_:
+    logger.info(f'Finished importing modules: {round(time.time()-start_import,1)} seconds')
 
 def running_job(folder: Path,
                 args: argparse.Namespace):
