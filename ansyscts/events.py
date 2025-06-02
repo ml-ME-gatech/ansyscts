@@ -101,11 +101,12 @@ class CFDOutputProcessor:
                 #Run Structural Analysis
                 logger.info('Running structural analysis')
                 structrual = StructuralAnalysisJob('structural - '+file.stem,
-                                                   parent_dir = self.parent)
+                                                   parent_dir = self.folder)
                 
-                struct_results_folder = self.parent.joinpath(f'_structural_results_{rstring}')
+                struct_results_folder = self.parent.joinpath(f'structural_results_{rstring}')
                 if config.DEBUG_:
                     logger.debug(f'Structural results folder: {struct_results_folder}')
+                    struct_results_folder = struct_results_folder.
                 if not self.run(structrual,interp_file,struct_results_folder):
                     self.error_process(f"Structural analysis of cfd file {file} failed")
 

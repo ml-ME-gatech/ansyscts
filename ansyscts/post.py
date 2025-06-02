@@ -259,7 +259,7 @@ def post_process_directory(directory: str | Path,
         psd[section + '/face_locations'] = iloc
         
         
-        #save cfd data to container,delete original files
+    #save cfd data to container,delete original files
     fluent_data =  pd.read_csv(cfd_temp_file,index_col= 0,header = 0)
     fluent_data.columns  = [c.strip() for c in fluent_data.columns]
     psd['fluent_data'] = fluent_data

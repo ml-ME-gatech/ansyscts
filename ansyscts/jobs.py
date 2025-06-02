@@ -9,7 +9,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 import shutil
 import os
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional
 from pathlib import Path
 from sciterp.mesh_transfer import LinearPointCloudMeshTransfer
 
@@ -135,7 +135,7 @@ def make_new_slurm_cluster_client(name: str,
 def save_apdl_outputs(temp_dir: Path,
                       new_dir: Path):
     
-    for file in temp_dir.iterdir():
+    for file in Path(temp_dir).iterdir():
         if '.node.loc' in file.name or '.node.dat' in file.name or '.node.cfdtemp' in file.name:
             _safe_file_copy(file, new_dir)
 
@@ -222,16 +222,12 @@ class StructuralAnalysisJob(SlurmJob):
     def __init__(self,name: str,
                     client: Client = None,
                     cluster: SLURMCluster = None,
-                    parent_dir: Path = None,
+                    parent_dir: Optional[Path] = None,
                     **resource_kwargs):
         
         super().__init__(name,client,cluster,**resource_kwargs)
         parent_dir = Path(os.getcwd()) if parent_dir is None else parent_dir
-        if not config.DEBUG_:
-            self.dir = TemporaryDirectory(dir=str(parent_dir))
-        else:
-            timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-            self.dir = Path(parent_dir).joinpath(f'debug-{timestamp}')
+        self.dir = TemporaryDirectory(dir=str(parent_dir))
 
     def make_client(self):
         additional_directives = [
@@ -277,11 +273,17 @@ class StructuralAnalysisJob(SlurmJob):
                 return False
         
         #run the analysis
+        if config.DEBUG_:
+            logger.info(f'Running structural analysis in temp directory: {str(_temp_path)}')
+            logger.info(f'Writing to result path: {str(result_path)}')
+        
         success = self._run(run_apdl_shell_command,_temp_path,result_path)
         
         #clean up the temp directory if process executed normally, otherwise, need to save
         if success and not config.DEBUG_:
             self.dir.cleanup()
+        elif not success:
+            logger.error(f'Structural analysis job {self.name} failed. Keeping temp directory for debugging: {str(_temp_path)}')
         
         return success
     
