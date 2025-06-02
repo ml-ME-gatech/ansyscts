@@ -37,7 +37,7 @@ class CFDOutputProcessor:
         super().__init__()
         self.folder = Path(folder)
         self.running_jobs = {}
-        self.parent = self.folder.parent if parent is None else parent
+        self.parent = Path(self.folder.parent if parent is None else parent)
         self.db_name = db_name  
         self.sim_type = sim_type
         self.meta = meta
