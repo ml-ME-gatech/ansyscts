@@ -9,13 +9,16 @@ from functools import cached_property
 
 
 #other .git libraries, need to make sure these are on PYTHONPATH or PAH
-from linearization_lib.linearization.vinterp import interpolate_nodal_values
+from sciterp.mesh_transfer import LinearPointCloudMeshTransfer 
 from linearization_lib.linearization.linearization import APDLIntegrate
 from linearization_lib.linearization.scl import SCL
 from linearization_lib.linearization.pair_component_nodes import LSANodePairer
 from sim_datautil.sim_datautil.dutil import SimulationData, SimulationDatabase
 import logging
 logger = logging.getLogger("ansyscts")
+
+from ansyscts.miscutil import _get_allocated_cores
+import ansyscts.config as config
 
 #globals for post
 xcols = [x + '-coordinate' for x in ['x','y','z']]
@@ -157,10 +160,17 @@ class LinearizedSection:
         scl_apdl = SCL(self.loc1.to_numpy(),self.loc2.to_numpy())
         scl_points = scl_apdl(npoints,flattened = True)
 
-        scl_sol,_ = interpolate_nodal_values(self.body[self.bounded_body],
-                                           data[self.bounded_body],
-                                           scl_points)
+        #intentiionally omitting registration - these are defined on the same mesh
+        #need to get the actual number of cores allocated to the job - different than cpu count
+        ntasks = max(_get_allocated_cores() - 1,1)
+        transfer = LinearPointCloudMeshTransfer(self.body[self.bounded_body],
+                                                data[self.bounded_body])
+        scl_sol= transfer(scl_points,k = 16,n_jobs = ntasks)
+        if scl_sol.ndim == 1:
+            scl_sol = scl_sol[:,np.newaxis]
         
+        print(scl_sol.shape)
+
         return APDLIntegrate(scl_sol,scl_points,npoints)
 
 
@@ -207,7 +217,7 @@ def linearize_section(name: str,
     for i,x in enumerate(xcols):
         data[x] = dloc[:,i]
     
-    data['temperature'] = linearize_section.linearize(df['temperature'].to_numpy()).thickness_average()
+    data['temperature'] = linearize_section.linearize(df['temperature'].values.reshape((-1,1))).thickness_average()
     
     for key,dat in data.items():
         data[key] = dat.squeeze()
@@ -224,6 +234,8 @@ def post_process_directory(directory: str | Path,
                            cfd_temp_file: str | Path,
                            cfd_interp_temp_file: str | Path,
                            db_name: str = 'transient_db',
+                           sections = ['shell','end_cap','outlet'],
+                           report_file: str | Path = None,
                            meta_data = {}):
 
     directory = Path(directory).resolve()
@@ -237,7 +249,7 @@ def post_process_directory(directory: str | Path,
     psd = SimulationData(complevel= 9)
 
     #iterate through sections and linearize
-    for section in ['shell']:
+    for section in sections:
         logger.info(f'linearizing {section} ...')
         pdf,idat,iloc = linearize_section(str(Path(directory).joinpath(section)))
         
@@ -248,12 +260,41 @@ def post_process_directory(directory: str | Path,
         
         
         #save cfd data to container,delete original files
-        fluent_data =  pd.read_csv(cfd_temp_file,index_col= 0,header = 0)
-        fluent_data.columns  = [c.strip() for c in fluent_data.columns]
-        psd['fluent_data'] = fluent_data
-        psd['interpolated_fluent_data'] = pd.read_csv(cfd_interp_temp_file,index_col = 0,header = 0)
+    fluent_data =  pd.read_csv(cfd_temp_file,index_col= 0,header = 0)
+    fluent_data.columns  = [c.strip() for c in fluent_data.columns]
+    psd['fluent_data'] = fluent_data
+    psd['interpolated_fluent_data'] = pd.read_csv(cfd_interp_temp_file,index_col = 0,header = 0)
 
+    if report_file is not None:
+        report_file = Path(report_file).resolve()
+        if report_file.exists():
+            logger.info(f'report file {str(report_file)} exists, adding to simulation darta')
+            rdf = pd.read_csv(str(report_file),index_col=0,header=0,skiprows = 2, sep = r'\s+')
+            columns = rdf.columns.tolist()
+            columns = [c.strip() for c in rdf.columns]
+            rdf.columns = columns
+            psd['report_file'] = rdf 
+        else:
+            logger.warning(f'report file {str(report_file)} does not exist, skipping')
 
     logger.info('completed linearization, appending post processed data to data base...')
     db.add(file_key,meta_data,psd)
     return True
+
+def main():
+    
+    path = Path('/storage/scratch1/2/mlanahan3/michael/t-tube/test_new/test_v2023R2')
+    post_process_directory(
+        path / '0_4/_structural_results_sXrn6NDqYLL75vLu',
+        '4',
+        path / '0_4/ttube_temperatures.surf.out',
+        path / '0_4/interpolated_temperatures_sXrn6NDqYLL75vLu.csv',
+        db_name = path / 'test_db', 
+        sections = [],
+        report_file = path / '0_4/report-file-0.out',
+        meta_data = {'hf': 10e6}
+    )
+
+
+if __name__ == '__main__':
+    main()

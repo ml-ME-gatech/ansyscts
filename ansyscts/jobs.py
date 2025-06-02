@@ -9,24 +9,25 @@ import subprocess
 from tempfile import TemporaryDirectory
 import shutil
 import os
-from typing import Tuple
+from typing import Tuple, Dict
 from pathlib import Path
-from linearization_lib.linearization.vinterp import interpolate_nodal_temperatures
+from sciterp.mesh_transfer import LinearPointCloudMeshTransfer
 
-from ansyscts.miscutil import _safe_read_csv_file, _safe_file_copy, _try_to_delete_file
+from ansyscts.miscutil import _safe_read_csv_file, _safe_file_copy, _try_to_delete_file,_get_allocated_cores
 from ansyscts.post import post_process_directory
 import ansyscts.config as config
 import datetime
-
+import ansyscts.senv as senv
 import logging
+import pandas as pd
 
 logger = logging.getLogger("ansyscts")
 
 _PARENT = Path(os.getcwd())
 
 #will need to setup this up in a config file
-TTUBE_NODE_FILE = _PARENT.joinpath('ttube.node.loc')
-TTUBE_DAT_FILE = _PARENT.joinpath('ttube_half.dat')
+TTUBE_NODE_FILE = _PARENT.joinpath(senv.TTUBE_NODE_FILE_)
+TTUBE_DAT_FILE = _PARENT.joinpath(senv.TTUBE_DAT_FILE_)
 APDL_SCRIPTS_FOLDER = Path(__file__).parent.parent.resolve().joinpath('apdl_scripts')
 
 class SlurmJob(ABC):
@@ -139,7 +140,12 @@ def save_apdl_outputs(temp_dir: Path,
             _safe_file_copy(file, new_dir)
 
 def run_apdl_shell_command(temp_dir: Path,
-                           result_dir: Path,*args, **kwargs):
+                           result_dir: Path,
+                           *args, 
+                           ansys_version = '2023R2',
+                           **kwargs):
+    
+    acmd = ansys_version[2:4] + ansys_version[-1]
     """
     Run ANSYS APDL shell command
     """
@@ -148,8 +154,9 @@ def run_apdl_shell_command(temp_dir: Path,
     os.chdir(str(temp_dir))  
 
     # Build the command string (or list)
-    cmds = ['module load ansys/2023R1',
-            f"ansys231 -s noread -smp -np $SLURM_NTASKS -b < export_data_ttube.input > apdl.out 2>&1"]
+    ntasks = _get_allocated_cores() - 4  # Reserve 4 cores for other tasks
+    cmds = [f'module load ansys/{ansys_version}',
+            f"ansys{acmd} -s noread -smp -np {ntasks} -b < export_data_ttube.input > apdl.out 2>&1"]
     
     result = subprocess.run('\n'.join(cmds), shell=True, cwd = str(temp_dir),
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,text = True)
@@ -166,20 +173,44 @@ def preprocess_cfd_output(cfd_input_file: Path,
                           outputfile : Path):
     
     
+    if config.DEBUG_:
+        logger.info(f'Preprocessing CFD output file: {cfd_input_file}')
+        logger.info(f'Output file will be saved to: {outputfile}')
     #Read the cfd output
     cfd_df = _safe_read_csv_file(cfd_input_file, index_col=0, header=0, sep=',')
-    cfd_df.columns = [c.strip() for c in cfd_df.columns]
     if cfd_df is None:
         return False
+    cfd_df.columns = [c.strip() for c in cfd_df.columns]
 
+    if config.DEBUG_:
+        logger.info(f'CFD DataFrame shape: {cfd_df.shape}')
+        logger.info(f'CFD DataFrame columns: {cfd_df.columns.tolist()}')
+    
     #avoid passing to much data to dask, just read it on the node
     ttude_nodes = _safe_read_csv_file(TTUBE_NODE_FILE,index_col = 0,header = None,sep = ',')
     if ttude_nodes is None:
         raise FileNotFoundError(f"Could not read the file: {TTUBE_NODE_FILE}")
+    
+    if config.DEBUG_:
+        logger.info(f'T-tube Nodes DataFrame shape: {ttude_nodes.shape}')
+        logger.info('Transferring temperature data from CFD output to T-tube nodes')
 
-    output_df, v_overlap = interpolate_nodal_temperatures(cfd_df, ttude_nodes,method = 'nearest')
-    if v_overlap < 0.9:
-        logger.warning(f'Overlap is only {round(v_overlap*100,3)}%. Check geometries.')
+    xcols = [c + '-coordinate' for c in ['x','y','z']]
+    transfer = LinearPointCloudMeshTransfer(cfd_df[xcols].values,
+                                            cfd_df[['temperature']].values)
+    
+    #need to get the actual number of cores allocated to the job - different than cpu count
+    ntasks = max(_get_allocated_cores() - 4,1)
+    if config.DEBUG_:
+        logger.debug(f'Number of tasks allocated for interpolation: {ntasks}')
+    
+    temperature_out,translation = transfer(ttude_nodes.values,translate = True,k = 16,n_jobs = ntasks)
+
+    output_df = pd.DataFrame(temperature_out, index=ttude_nodes.index.astype(int), columns=['temperature'])
+    if config.DEBUG_:
+        logger.info('Completed transferring temperature data from CFD output to T-tube nodes')
+        logger.info(f'Output DataFrame shape: {output_df.shape}')
+        logger.info(f'Computed Translation: x = {translation[0]},y = {translation[1]}, z = {translation[2]}')
 
     output_df.to_csv(outputfile)
     return True
@@ -292,18 +323,34 @@ class PostProcess(SlurmJob):
     def run(self,  structural_results_folder: Path,
                    cfd_output_file: Path,
                    interpolated_temperature_file: Path,
-                   time_step: int,
+                   time_step: int | None,
                    db_name: str | Path,
                    report_file: Path,
-                   delete_intermediate_files: bool = False) -> bool:
+                   delete_intermediate_files: bool = False,
+                   read_report_file: bool = True,
+                   meta: Dict ={},
+                   file_key: str = '') -> bool:
         
-        flow_time = self.get_flow_time_from_report_file(report_file,time_step)
-
-        post =  self._run(post_process_directory,structural_results_folder,str(time_step),
+        
+        if time_step is not None:
+            flow_time = self.get_flow_time_from_report_file(report_file,time_step)
+            meta.update({'flow_time': float(flow_time), 'time_step': time_step})
+        else:
+            flow_time = None
+        
+        file_key = str(time_step) if time_step is not None else file_key
+        if config.DEBUG_:
+            logger.info(f'Post-processing structural results for file key: {file_key}')
+            logger.info(f'Structural results folder: {structural_results_folder}')
+            logger.info(f'CFD output file: {cfd_output_file}')
+            logger.info(f'Database name: {db_name}')
+        
+        post =  self._run(post_process_directory,structural_results_folder,file_key,
                          cfd_output_file,
                          interpolated_temperature_file,
                          db_name = db_name,
-                         meta_data = {'flow_time':float(flow_time),'time_step':time_step})
+                         meta_data = meta,
+                         read_report_file = read_report_file)
         
         if post:
             if delete_intermediate_files:

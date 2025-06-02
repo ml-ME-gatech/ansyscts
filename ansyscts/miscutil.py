@@ -93,3 +93,33 @@ def _parse_fluent_output_filename(file: Path) -> int:
 def _exit_error(message: str):
     logger.error(message)
     sys.exit(1)
+
+def _get_allocated_cores() -> int:
+    """
+    Return the number of CPUs that Slurm allocated to this job
+    (falling back to os.cpu_count() if no Slurm variable is set).
+    """
+    # 1) First check for SLURM_CPUS_ON_NODE
+    cpus_on_node = os.environ.get("SLURM_CPUS_ON_NODE")
+    if cpus_on_node is not None:
+        try:
+            return int(cpus_on_node)
+        except ValueError:
+            logger.warning("SLURM_CPUS_ON_NODE is set but not an integer: "
+                           f"{cpus_on_node!r}")
+
+    # 2) Then check for SLURM_CPUS_PER_TASK
+    cpus_per_task = os.environ.get("SLURM_CPUS_PER_TASK")
+    if cpus_per_task is not None:
+        try:
+            return int(cpus_per_task)
+        except ValueError:
+            logger.warning("SLURM_CPUS_PER_TASK is set but not an integer: "
+                           f"{cpus_per_task!r}")
+
+    # 3) If none of the Slurm vars exist, fall back to os.cpu_count()
+    try:
+        return os.cpu_count() or 1
+    except Exception as e:
+        logger.error(f"Error getting os.cpu_count(): {e}")
+        return 1

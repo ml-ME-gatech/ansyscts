@@ -5,32 +5,72 @@ from pathlib import Path
 import signal
 import time
 import sys
-
 from sim_datautil.sim_datautil.dutil import SimulationDatabase
 from ansyscts.jobs import PreProcessCFDOutputJob, StructuralAnalysisJob, PostProcess, SlurmJob
 from ansyscts.miscutil import _parse_fluent_output_filename, _is_file_complete, _safe_file_copy, _exit_error
 import logging
 import ansyscts.config as config
+from typing import Dict
+import random
+import string
 
 logger = logging.getLogger("ansyscts")
 
-class CFDOutputFileHandler(FileSystemEventHandler):
+def random_string(length=16):
+    alphabet = string.ascii_letters + string.digits
+    if config.DEBUG_:
+        logger.debug(f"Generating random string of length {length} from alphabet: {alphabet}")
+    return ''.join(random.choices(alphabet,k = length))
+
+class CFDOutputProcessor:
+
+    def __init__(self,file: Path,
+                 db_name: str | Path,
+                 parent: Path = None,
+                 max_workers: int = 5,
+                 sim_type = 'transient',
+                 meta: Dict = {}):
+        """
+        Initialize the CFDOutputProcessor with the necessary parameters.
+        
+        Parameters:
+        - file: Path to the CFD output file.
+        - db_name: Name of the database to store results.
+        - parent: Parent directory for results.
+        - max_workers: Maximum number of workers for processing files.
+        - sim_type: Type of simulation ('transient' or 'steady-state').
+        - meta: Metadata for the simulation.
+        """
+        self.file = file
+        self.db_name = db_name
+        self.parent = parent if parent else file.parent
+        self.max_workers = max_workers
+        self.sim_type = sim_type
+        self.meta = meta
+
+    def process(self):
+        
+
+class CFDOutputProcessor:
 
     def __init__(self,folder: Path,
                       db_name: str | Path,
                       parent: Path = None,
-                      max_workers: int = 5):
+                      max_workers: int = 5,
+                      sim_type = 'transient',
+                      meta: Dict = {}):
         
+        if sim_type not in {'transient', 'steady-state'}:
+            raise ValueError(f"Invalid simulation type: {sim_type}. Must be 'transient' or 'steady-state'.")
+
         super().__init__()
-        self.executor = ThreadPoolExecutor(max_workers)
-        self.folder = folder
+        self.folder = Path(folder)
         self.running_jobs = {}
         self.parent = self.folder.parent if parent is None else parent
         self.db_name = db_name  
+        self.sim_type = sim_type
+        self.meta = meta
     
-    def on_created(self, event):
-        file = Path(event.src_path)
-        self.executor.submit(self.process_file,file)
     
     def run(self, job: SlurmJob,
                   *args,
@@ -69,12 +109,20 @@ class CFDOutputFileHandler(FileSystemEventHandler):
                 logger.info(f"File {file} determined completed, proceeding with analysis")
 
                 #Pre-process the CFD output
-                time_step = _parse_fluent_output_filename(file)
-                if time_step is None:
+                if self.sim_type == 'steady-state':
+                    time_step = None
+                else:
+                    time_step = _parse_fluent_output_filename(file)
+                
+                if time_step is None and self.sim_type == 'transient':
                     self.error_process(f"Could not parse time step from file name {file}")
                 
                 logger.info('Pre-processing cfd inputs')
-                interp_file = file.parent.joinpath(f'interpolated_temperatures_{time_step}.csv')
+                rstring = random_string()
+                fname = f'interpolated_temperatures_{str(time_step)}_{rstring}.csv' if time_step is not None else f'interpolated_temperatures_{rstring}.csv'
+                #Create the file name for the interpolated CFD output
+                interp_file = self.parent.joinpath(fname)
+
                 cfd_pre = PreProcessCFDOutputJob('cfd_pre - '+file.stem)  
                 if not self.run(cfd_pre,file,interp_file):
                     self.error_process(f"Pre-processing of cfd file {file} failed")
@@ -84,7 +132,9 @@ class CFDOutputFileHandler(FileSystemEventHandler):
                 structrual = StructuralAnalysisJob('structural - '+file.stem,
                                                    parent_dir = self.parent)
                 
-                struct_results_folder = results_folder.joinpath(file.stem + '_structural_results')
+                struct_results_folder = self.parent.joinpath(f'_structural_results_{rstring}')
+                if config.DEBUG_:
+                    logger.debug(f'Structural results folder: {struct_results_folder}')
                 if not self.run(structrual,interp_file,struct_results_folder):
                     self.error_process(f"Structural analysis of cfd file {file} failed")
 
@@ -93,7 +143,10 @@ class CFDOutputFileHandler(FileSystemEventHandler):
                 logger.info('Post-processing structural results')
                 post_process = PostProcess('post_process - '+file.stem)
                 rfile = self.parent.joinpath(config.REPORT_FILE_NAME_)
-                if not self.run(post_process,struct_results_folder,file,interp_file,time_step,self.db_name,rfile):
+                read_report_file = True if self.sim_type =='steady-state' else False
+
+                if not self.run(post_process,struct_results_folder,file,interp_file,time_step,self.db_name,rfile,
+                                read_report_file = read_report_file,meta = self.meta,file_key = self.parent.name):
                     self.error_process(f"Post-processing of structural file {file} failed")
                 
                 logger.info(f"Analysis of {file} completed successfully")
@@ -114,8 +167,50 @@ class CFDOutputFileHandler(FileSystemEventHandler):
             except Exception as e:
                 logger.error(f"Error killing job {name}: {str(e)}")
 
-        self.executor.shutdown(wait=False)
-        logger.info('Shut down CFD output file handler')
+
+
+class CFDOutputFileHandler(FileSystemEventHandler):
+
+    def __init__(self, folder: Path,
+                    db_name: str | Path,
+                    parent: Path = None,
+                    max_workers: int = 5,
+                    sim_type = 'transient',
+                    meta: Dict = {}):
+            """
+            Initialize the CFDOutputFileHandler with the necessary parameters.
+            
+            Parameters:
+            - folder: Path to the folder to watch for CFD output files.
+            - db_name: Name of the database to store results.
+            - parent: Parent directory for results.
+            - max_workers: Maximum number of workers for processing files.
+            - sim_type: Type of simulation ('transient' or 'steady-state').
+            - meta: Metadata for the simulation.
+            """
+            super().__init__()
+            self.folder = Path(folder)
+            self.executor = ThreadPoolExecutor(max_workers=max_workers)
+            self.processor = CFDOutputProcessor(self.folder, 
+                                                db_name, 
+                                                parent, 
+                                                max_workers, 
+                                                sim_type, 
+                                                meta)
+
+
+    def on_created(self, event):
+        file = Path(event.src_path)
+        self.executor.submit(self.processor.process_file,file)
+
+    def shutdown(self):
+        """
+        Shutdown the ThreadPoolExecutor and wait for all jobs to finish.
+        """
+        logger.info('Shutting down CFDOutputFileHandler')
+        self.processor.shutdown()
+        self.executor.shutdown(wait=True)
+        logger.info('CFDOutputFileHandler shutdown complete')
 
     def from_interrupted(self, db: SimulationDatabase):
         """
@@ -128,10 +223,10 @@ class CFDOutputFileHandler(FileSystemEventHandler):
         logger.info('Restarting CFDOutputFileHandler from interrupted state')
         for file in self.folder.iterdir():
             time_step = _parse_fluent_output_filename(file)
-            if str(time_step) not in db.keys() and self._is_cfd_file(file):
+            if str(time_step) not in db.keys() and self.processor._is_cfd_file(file):
                 logger.info(f"Restarting analysis of file {file}")
                 try:
-                    self.executor.submit(self.process_file,file)
+                    self.executor.submit(self.processor.process_file,file)
                     time.sleep(config.CLUSTER_DELAY_)       #wait a bit after starting job
                 except Exception as e:
                     logger.error(f"Error submitting job for file {file}: {str(e)}")
@@ -175,3 +270,9 @@ class Runner:
             self.termination_handler(signal.SIGINT, None) 
 
 
+def main():
+
+    string = random_string()
+    print(f"Generated random string: {string}")
+if __name__ == "__main__":
+    main()

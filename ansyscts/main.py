@@ -2,10 +2,16 @@ import time
 start_import = time.time()
 import argparse
 import ansyscts.config as config
+import ansyscts.senv as senv
 import logging
 from pathlib import Path
 import os
 import datetime
+from typing import Dict
+import pandas as pd
+import copy
+from multiprocessing import Process
+import signal
 
 #basic argument parsing and checking
 parser = argparse.ArgumentParser()
@@ -15,6 +21,7 @@ parser.add_argument('--path_to_watch',type = str,default = 'output',
 parser.add_argument('--db_name',type = str,default = None)
 parser.add_argument('--rmode',type = str,default = 'continue')
 parser.add_argument('--smode',type = str,default = 'running')
+parser.add_argument('--batch',type = bool,default = False)
 parser.add_argument('--debug',action = 'store_true',help="Enable debug mode.")
 parser.add_argument('--max_workers',type = int,default = 5,help = 'Maximum number of workers for the thread pool')
 parser.add_argument('--queue',type = str,default = 'inferno',help = 'Queue to submit jobs to')
@@ -26,6 +33,8 @@ parser.add_argument('--dask_timeout',type = str,default = 3600,
 parser.add_argument('--dask_allowed_failures',type = int,default = 5)
 parser.add_argument('--fluent_report_file',type = str,default = 'report-file-0.out',
                     help = 'Name of the fluent report file')
+
+parser.add_argument('--max_wait',type = int,default = 24*60*60)
 
 args = parser.parse_args()
 assert args.smode in {'running','interrupted'}, 'mode must be either running or interrupted'
@@ -40,6 +49,7 @@ config.REPORT_FILE_NAME_ = args.flrfile
 config.DASK_TIMEOUT_ = args.dask_timeout
 config.DASK_ALLOWED_FAILURES_ = args.dask_allowed_failures
 config.REPORT_FILE_NAME_ = args.fluent_report_file
+config.MAX_WAIT_TIME_ = args.max_wait
 
 logger = logging.getLogger("ansyscts")
 folder = Path(args.folder).resolve()
@@ -61,8 +71,10 @@ logger.info(f'Starting coupled CFD-Structural simulation in folder {folder}')
 if config.DEBUG_:
     logger.info('Debugging active')
 
+
 logger.info(f'Run mode: {config.RUN_MODE_}')   
 logger.info(f'Simulation mode: {args.smode}') 
+logger.info(f'Maximum wait time: {config.MAX_WAIT_TIME_} seconds')
 
 from dask import config as dask_config
 timeout_config = ["distributed.scheduler.idle-timeout",
@@ -80,7 +92,7 @@ if config.DEBUG_:
 
 dask_config.set({"distributed.scheduler.allowed-failures": config.DASK_ALLOWED_FAILURES_})
 
-from ansyscts.events import CFDOutputFileHandler, Runner
+from ansyscts.events import CFDOutputFileHandler,CFDOutputProcessor, Runner
 from sim_datautil.sim_datautil.dutil import SimulationDatabase
 from ansyscts.miscutil import _exit_error
 from watchdog.observers.polling import PollingObserver
@@ -89,7 +101,10 @@ if config.DEBUG_:
     logger.info(f'Finished importing modules: {round(time.time()-start_import,1)} seconds')
 
 def running_job(folder: Path,
-                args: argparse.Namespace):
+                args: argparse.Namespace,
+                simulation_type: str = 'transient',
+                parent: Path = None,
+                meta: Dict = None):
     
     PATH_TO_WATCH = folder.joinpath(args.path_to_watch).resolve()
     if not PATH_TO_WATCH.exists():
@@ -102,8 +117,10 @@ def running_job(folder: Path,
 
     event_handler = CFDOutputFileHandler(PATH_TO_WATCH,
                                          args.db_name,
-                                         parent = folder,
-                                         max_workers = config.MAX_WORKERS_)
+                                         parent = folder if parent is None else parent,
+                                         max_workers = config.MAX_WORKERS_,
+                                         sim_type = simulation_type,
+                                         meta = meta)
     observer = PollingObserver()
     observer.schedule(event_handler, str(PATH_TO_WATCH), recursive=True)
     observer.start()
@@ -139,10 +156,58 @@ def interrupted_job(folder: Path,
     
     runner.from_interrupted(SimulationDatabase(args.db_name, create_db = create))
 
+def running_batch_job(folder: Path,
+                      args: argparse.Namespace):
+    """
+    This function is used to run a batch job in the running mode.
+    It will create a new folder for the job and run the job in that folder.
+    """
+    parameters = pd.read_csv(folder.joinpath('parameters.csv'), index_col=0, header=0)
+
+    procs = []
+    for job_folder in parameters.index:
+        meta = parameters.loc[job_folder].to_dict()
+        args_ = copy.deepcopy(args)
+        args_.path_to_watch = job_folder
+        p = Process(target = running_job,
+                   args = (folder,args_,'steady-state',folder,meta),
+                   daemon = True)
+        p.start()
+        procs.append(p)
+    
+    
+    # If you want to intercept Ctrl+C in the parent and kill children:
+    def handle_sigint(signum, frame):
+        logger.info("Batch run got SIGINT → terminating children ...")
+        for proc in procs:
+            proc.terminate()
+        for proc in procs:
+            proc.join()
+        exit(0)
+
+    signal.signal(signal.SIGINT, handle_sigint)
+    signal.signal(signal.SIGTERM, handle_sigint)
+    while True:
+        time.sleep(config.MAX_WAIT_TIME_)  # Sleep for 24 hours, or adjust as needed
+
+def process_file(file: str | Path,
+                 args: argparse.Namespace,
+                 meta: Dict):
+
+    
+    cp = CFDOutputProcessor(file,args)
+
 def main():
 
     #run the job
-    if args.smode == 'running':
-        running_job(folder,args)
+    
+    if args.batch:
+        logger.info('Running in batch mode')
+        running_batch_job(folder,args)
+        return
+    
     else:
-        interrupted_job(folder,args)
+        if args.smode == 'running':
+            running_job(folder,args)
+        else:
+            interrupted_job(folder,args)
