@@ -35,9 +35,9 @@ class CFDOutputProcessor:
             raise ValueError(f"Invalid simulation type: {sim_type}. Must be 'transient' or 'steady-state'.")
 
         super().__init__()
-        self.folder = Path(folder)
+        self.folder = Path(folder).resolve()
         self.running_jobs = {}
-        self.parent = Path(self.folder.parent if parent is None else parent)
+        self.parent = Path(self.folder.parent if parent is None else parent).resolve()
         self.db_name = db_name  
         self.sim_type = sim_type
         self.meta = meta
