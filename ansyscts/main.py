@@ -194,12 +194,13 @@ def running_batch_job(folder: Path,
         time.sleep(config.MAX_WAIT_TIME_)  # Sleep for 24 hours, or adjust as needed
 
 def make_process_file(args: argparse.Namespace,
+                      sim_folder: Path,
                       meta: Dict) -> ProcessRunner:
 
     
-    cp = CFDOutputProcessor(args.patch_to_watch,
+    cp = CFDOutputProcessor(sim_folder,
                             args.db_name,
-                            parent = args.patch_to_watch,
+                            parent = sim_folder,
                             sim_type = 'steady-state',
                             meta = meta)
     
@@ -239,9 +240,9 @@ def process_batch(folder: str | Path,
     # Register the signal handler
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    args.path_to_watch = folder
     for job_folder in parameters.index:
-        file = Path(args.path_to_watch).joinpath(config.CFD_INPUT_FILE_DEFAULT_).resolve()
+        sim_folder = folder / str(job_folder)
+        file = sim_folder / config.CFD_INPUT_FILE_DEFAULT_
         if not file.exists():
             logger.info(f'File {file} does not exist, skipping')
             continue
@@ -249,8 +250,7 @@ def process_batch(folder: str | Path,
             logger.info(f'Found {file}, processing...')
             meta = parameters.loc[job_folder].to_dict()
             args_ = copy.deepcopy(args)
-            args_.patch_to_watch = job_folder
-            running[job_folder] = make_process_file(args_, meta)
+            running[job_folder] = make_process_file(args_,sim_folder, meta)
             
             p = Process(
                 target=running[job_folder].run,
