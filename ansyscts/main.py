@@ -223,12 +223,11 @@ def process_batch(folder: str | Path,
     Process a batch of files in the running mode.
     Creates a new folder for the job and runs the job in that folder.
     """
+    folder = Path(folder).resolve()
     parameters = pd.read_csv(folder.joinpath('parameters.csv'), index_col=0, header=0)
 
     procs = []
     running = {}
-
-    folder = Path(folder).resolve()
     def signal_handler(sig, frame):
         logger.info(f"Received signal {sig}. Terminating all running processes...")
         for p in procs:
@@ -242,7 +241,7 @@ def process_batch(folder: str | Path,
     signal.signal(signal.SIGTERM, signal_handler)
     args.path_to_watch = folder
     for job_folder in parameters.index:
-        file = args.patch_to_watch.joinpath(config.CFD_INPUT_FILE_DEFAULT_).resolve()
+        file = Path(args.path_to_watch).joinpath(config.CFD_INPUT_FILE_DEFAULT_).resolve()
         if not file.exists():
             logger.info(f'File {file} does not exist, skipping')
             continue
@@ -255,7 +254,7 @@ def process_batch(folder: str | Path,
             
             p = Process(
                 target=running[job_folder].run,
-                args=(file),
+                args=(file,),
                 daemon=True
             )
             
