@@ -12,6 +12,7 @@ import pandas as pd
 import copy
 from multiprocessing import Process
 import signal
+import sys
 
 #basic argument parsing and checking
 parser = argparse.ArgumentParser()
@@ -33,6 +34,7 @@ parser.add_argument('--dask_timeout',type = str,default = 3600,
 parser.add_argument('--dask_allowed_failures',type = int,default = 5)
 parser.add_argument('--fluent_report_file',type = str,default = 'report-file-0.out',
                     help = 'Name of the fluent report file')
+parser.add_argument('--cfd_input',type = str,default = 'ttube_temperatures.surf.out')
 
 parser.add_argument('--max_wait',type = int,default = 24*60*60)
 
@@ -50,6 +52,7 @@ config.DASK_TIMEOUT_ = args.dask_timeout
 config.DASK_ALLOWED_FAILURES_ = args.dask_allowed_failures
 config.REPORT_FILE_NAME_ = args.fluent_report_file
 config.MAX_WAIT_TIME_ = args.max_wait
+config.CFD_INPUT_FILE_DEFAULT_ = args.cfd_input
 
 logger = logging.getLogger("ansyscts")
 folder = Path(args.folder).resolve()
@@ -92,7 +95,7 @@ if config.DEBUG_:
 
 dask_config.set({"distributed.scheduler.allowed-failures": config.DASK_ALLOWED_FAILURES_})
 
-from ansyscts.events import CFDOutputFileHandler,CFDOutputProcessor, Runner
+from ansyscts.events import CFDOutputFileHandler,CFDOutputProcessor, Runner, ProcessRunner
 from sim_datautil.sim_datautil.dutil import SimulationDatabase
 from ansyscts.miscutil import _exit_error
 from watchdog.observers.polling import PollingObserver
@@ -190,12 +193,87 @@ def running_batch_job(folder: Path,
     while True:
         time.sleep(config.MAX_WAIT_TIME_)  # Sleep for 24 hours, or adjust as needed
 
-def process_file(file: str | Path,
-                 args: argparse.Namespace,
-                 meta: Dict):
+def make_process_file(args: argparse.Namespace,
+                      meta: Dict) -> ProcessRunner:
 
     
-    cp = CFDOutputProcessor(file,args)
+    cp = CFDOutputProcessor(args.patch_to_watch,
+                            args.db_name,
+                            parent = args.patch_to_watch,
+                            sim_type = 'steady-state',
+                            meta = meta)
+    
+    return ProcessRunner(cp)
+
+
+def process_file(file: str | Path,
+                args: argparse.Namespace,
+                meta: Dict) -> None:
+    """
+    This function is used to process a single file in the running mode.
+    It will create a new folder for the job and run the job in that folder.
+    """
+    pr = make_process_file(args, meta)
+    pr.run(Path(file))
+
+    
+def process_batch(folder: str | Path,
+                  args: argparse.Namespace):
+    """
+    Process a batch of files in the running mode.
+    Creates a new folder for the job and runs the job in that folder.
+    """
+    parameters = pd.read_csv(folder.joinpath('parameters.csv'), index_col=0, header=0)
+
+    procs = []
+    running = {}
+
+    folder = Path(folder).resolve()
+    def signal_handler(sig, frame):
+        logger.info(f"Received signal {sig}. Terminating all running processes...")
+        for p in procs:
+            if p.is_alive():
+                logger.info(f"Terminating process {p.pid}")
+                p.terminate()
+        sys.exit(0)
+
+    # Register the signal handler
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    args.path_to_watch = folder
+    for job_folder in parameters.index:
+        file = args.patch_to_watch.joinpath(config.CFD_INPUT_FILE_DEFAULT_).resolve()
+        if not file.exists():
+            logger.info(f'File {file} does not exist, skipping')
+            continue
+        else:
+            logger.info(f'Found {file}, processing...')
+            meta = parameters.loc[job_folder].to_dict()
+            args_ = copy.deepcopy(args)
+            args_.patch_to_watch = job_folder
+            running[job_folder] = make_process_file(args_, meta)
+            
+            p = Process(
+                target=running[job_folder].run,
+                args=(file),
+                daemon=True
+            )
+            
+            p.start()
+            procs.append(p)
+
+    # Wait for all processes to complete
+    try:
+        for proc in procs:
+            proc.join()
+    except KeyboardInterrupt:
+        logger.info("KeyboardInterrupt received. Terminating all running processes...")
+        for p in procs:
+            if p.is_alive():
+                logger.info(f"Terminating process {p.pid}")
+                p.terminate()
+        sys.exit(0)
+
 
 def main():
 
@@ -203,7 +281,10 @@ def main():
     
     if args.batch:
         logger.info('Running in batch mode')
-        running_batch_job(folder,args)
+        if args.smode == 'running':
+            running_batch_job(folder,args)
+        else:
+            process_batch(folder,args)
         return
     
     else:

@@ -10,7 +10,7 @@ from ansyscts.jobs import PreProcessCFDOutputJob, StructuralAnalysisJob, PostPro
 from ansyscts.miscutil import _parse_fluent_output_filename, _is_file_complete, _safe_file_copy, _exit_error
 import logging
 import ansyscts.config as config
-from typing import Dict
+from typing import Dict, Optional
 import random
 import string
 
@@ -22,41 +22,12 @@ def random_string(length=16):
         logger.debug(f"Generating random string of length {length} from alphabet: {alphabet}")
     return ''.join(random.choices(alphabet,k = length))
 
-class CFDOutputProcessor:
-
-    def __init__(self,file: Path,
-                 db_name: str | Path,
-                 parent: Path = None,
-                 max_workers: int = 5,
-                 sim_type = 'transient',
-                 meta: Dict = {}):
-        """
-        Initialize the CFDOutputProcessor with the necessary parameters.
         
-        Parameters:
-        - file: Path to the CFD output file.
-        - db_name: Name of the database to store results.
-        - parent: Parent directory for results.
-        - max_workers: Maximum number of workers for processing files.
-        - sim_type: Type of simulation ('transient' or 'steady-state').
-        - meta: Metadata for the simulation.
-        """
-        self.file = file
-        self.db_name = db_name
-        self.parent = parent if parent else file.parent
-        self.max_workers = max_workers
-        self.sim_type = sim_type
-        self.meta = meta
-
-    def process(self):
-        
-
 class CFDOutputProcessor:
 
     def __init__(self,folder: Path,
                       db_name: str | Path,
-                      parent: Path = None,
-                      max_workers: int = 5,
+                      parent: Optional[Path] = None,
                       sim_type = 'transient',
                       meta: Dict = {}):
         
@@ -143,10 +114,9 @@ class CFDOutputProcessor:
                 logger.info('Post-processing structural results')
                 post_process = PostProcess('post_process - '+file.stem)
                 rfile = self.parent.joinpath(config.REPORT_FILE_NAME_)
-                read_report_file = True if self.sim_type =='steady-state' else False
 
-                if not self.run(post_process,struct_results_folder,file,interp_file,time_step,self.db_name,rfile,
-                                read_report_file = read_report_file,meta = self.meta,file_key = self.parent.name):
+                if not self.run(post_process,struct_results_folder,file,interp_file,time_step,self.db_name,
+                                rfile,meta = self.meta,file_key = self.parent.name):
                     self.error_process(f"Post-processing of structural file {file} failed")
                 
                 logger.info(f"Analysis of {file} completed successfully")
@@ -157,6 +127,8 @@ class CFDOutputProcessor:
     def _is_cfd_file(self,file: Path) -> bool:
         if not file.is_dir() and file.suffix == '.out' and 'temperature' in file.stem:
             return True
+        else:
+            return False
 
     def shutdown(self):
         logger.info('Killing running jobs')
@@ -173,7 +145,7 @@ class CFDOutputFileHandler(FileSystemEventHandler):
 
     def __init__(self, folder: Path,
                     db_name: str | Path,
-                    parent: Path = None,
+                    parent:  Optional[Path] = None,
                     max_workers: int = 5,
                     sim_type = 'transient',
                     meta: Dict = {}):
@@ -194,7 +166,6 @@ class CFDOutputFileHandler(FileSystemEventHandler):
             self.processor = CFDOutputProcessor(self.folder, 
                                                 db_name, 
                                                 parent, 
-                                                max_workers, 
                                                 sim_type, 
                                                 meta)
 
@@ -269,7 +240,34 @@ class Runner:
             logger.info('Keyboard interrupt received, stopping execution for interrupted files')
             self.termination_handler(signal.SIGINT, None) 
 
+class ProcessRunner: 
 
+    def __init__(self,processor: CFDOutputProcessor):
+        self.processor = processor
+
+        signal.signal(signal.SIGINT,self.termination_handler)
+        signal.signal(signal.SIGTERM,self.termination_handler)
+
+    def termination_handler(self,signal_received,frame):
+        logger.info(f"Received shutdown signal ({signal_received}). Initiating graceful shutdown.")
+        self.processor.shutdown()  # Shutdown ThreadPool and running jobs
+        # Optionally wait for the observer to finish if needed
+        sys.exit(0)
+
+    def run(self, file: Path):
+        """
+        Run the CFD output processor on the given file.
+        
+        Parameters:
+        - file: Path to the CFD output file to process.
+        """
+        try:
+            self.processor.process_file(file)
+        except Exception as e:
+            logger.error(f"Error processing file {file}: {str(e)}")
+
+        self.processor.shutdown()
+         
 def main():
 
     string = random_string()

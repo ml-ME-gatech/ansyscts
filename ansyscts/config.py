@@ -11,6 +11,7 @@ CLUSTER_DELAY_ = 5.0            #delay between job submissions in seconds
 DASK_TIMEOUT_ = 3600            #timeout for dask client in seconds
 DASK_ALLOWED_FAILURES_ = 5      #number of allowed failures for dask client
 MAX_WAIT_TIME_ = 24*60*60       #maximum wait time for script
+CFD_INPUT_FILE_DEFAULT_ = 'ttube_temperatures.surf.out'
 #config for slurm
 ACCOUNT_ = 'gts-my14-paid'      #account to charge
 QUEUE_ = 'inferno'              #queue to submit jobs to

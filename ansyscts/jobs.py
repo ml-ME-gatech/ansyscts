@@ -327,7 +327,6 @@ class PostProcess(SlurmJob):
                    db_name: str | Path,
                    report_file: Path,
                    delete_intermediate_files: bool = False,
-                   read_report_file: bool = True,
                    meta: Dict ={},
                    file_key: str = '') -> bool:
         
@@ -350,7 +349,7 @@ class PostProcess(SlurmJob):
                          interpolated_temperature_file,
                          db_name = db_name,
                          meta_data = meta,
-                         read_report_file = read_report_file)
+                         report_file = report_file)
         
         if post:
             if delete_intermediate_files:
