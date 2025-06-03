@@ -287,7 +287,7 @@ def process_batch(folder: str | Path,
             continue
         else:
             logger.info(f'Found {file}, processing...')
-            meta = parameters.loc[job_folder].to_dict()
+            meta = parameters.loc[int(job_folder)].to_dict()
             args_ = copy.deepcopy(args)
             if args.post_only:
                 running[job_folder], input_args = make_post_process_folder(args_, sim_folder, meta)
