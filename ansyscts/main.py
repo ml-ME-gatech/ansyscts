@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 import os
 import datetime
-from typing import Dict
+from typing import Dict, Tuple
 import pandas as pd
 import copy
 from multiprocessing import Process
@@ -35,8 +35,10 @@ parser.add_argument('--dask_allowed_failures',type = int,default = 5)
 parser.add_argument('--fluent_report_file',type = str,default = 'report-file-0.out',
                     help = 'Name of the fluent report file')
 parser.add_argument('--cfd_input',type = str,default = 'ttube_temperatures.surf.out')
-
+parser.add_argument('--overwrite_db',action = 'store_true',help="overwrite data in the database if it exists")
 parser.add_argument('--max_wait',type = int,default = 24*60*60)
+parser.add_argument('--post_only',action = 'store_true',
+                    help = 'Only run post-processing, do not run the CFD job')
 
 args = parser.parse_args()
 assert args.smode in {'running','interrupted'}, 'mode must be either running or interrupted'
@@ -95,7 +97,7 @@ if config.DEBUG_:
 
 dask_config.set({"distributed.scheduler.allowed-failures": config.DASK_ALLOWED_FAILURES_})
 
-from ansyscts.events import CFDOutputFileHandler,CFDOutputProcessor, Runner, ProcessRunner
+from ansyscts.events import CFDOutputFileHandler,CFDOutputProcessor, Runner, ProcessRunner,PostProcess
 from sim_datautil.sim_datautil.dutil import SimulationDatabase
 from ansyscts.miscutil import _exit_error
 from watchdog.observers.polling import PollingObserver
@@ -206,6 +208,34 @@ def make_process_file(args: argparse.Namespace,
     
     return ProcessRunner(cp)
 
+def make_post_process_folder(args: argparse.Namespace,
+                             sim_folder: Path,
+                             meta: Dict) -> Tuple[ProcessRunner,Tuple]:
+    """
+    This function is used to create a post-processing file.
+    It will create a new folder for the job and run the job in that folder.
+    """
+    post = PostProcess(f'restarted-post-{sim_folder.name}')
+    files = {'structural_results': None,
+             'cfd_output': None,
+             'cfd_interpolatted':None}
+    
+    for file in sim_folder.iterdir():
+        if file.is_dir() and 'structural_results_' in file.name:
+            files['structural_results'] = file
+        elif file.is_file() and  file.name == config.CFD_INPUT_FILE_DEFAULT_:
+            files['cfd_output'] = file
+        elif file.is_file() and 'interpolated_temperatures_' in file.name:
+            files['cfd_interpolatted'] = file
+
+    for key, value in files.items():
+        if value is None:
+            logger.warning(f'File {key} not found in {sim_folder}, skipping post-processing')
+    
+    args = (files['structural_results'], files['cfd_output'], files['cfd_interpolatted'],
+            None,args.db_name, config.REPORT_FILE_NAME_,False,meta,folder.name)
+    
+    return ProcessRunner(post),args
 
 def process_file(file: str | Path,
                 args: argparse.Namespace,
@@ -215,6 +245,7 @@ def process_file(file: str | Path,
     It will create a new folder for the job and run the job in that folder.
     """
     pr = make_process_file(args, meta)
+    
     pr.run(Path(file))
 
     
@@ -225,7 +256,14 @@ def process_batch(folder: str | Path,
     Creates a new folder for the job and runs the job in that folder.
     """
     folder = Path(folder).resolve()
+    sim_folder = folder/ args.db_name
     parameters = pd.read_csv(folder.joinpath('parameters.csv'), index_col=0, header=0)
+    if sim_folder.exists() and not args.overwrite_db:
+        sim_db = SimulationDatabase(sim_folder, create_db=False)
+        keys = sim_db.keys()
+        folder_index = list(set([str(k) for k in parameters.index]) - set(keys))
+    else:
+        folder_index = parameters.index
 
     procs = []
     running = {}
@@ -240,7 +278,7 @@ def process_batch(folder: str | Path,
     # Register the signal handler
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    for job_folder in parameters.index:
+    for job_folder in folder_index:
         sim_folder = folder / str(job_folder)
         file = sim_folder / config.CFD_INPUT_FILE_DEFAULT_
         if not file.exists():
@@ -250,11 +288,22 @@ def process_batch(folder: str | Path,
             logger.info(f'Found {file}, processing...')
             meta = parameters.loc[job_folder].to_dict()
             args_ = copy.deepcopy(args)
-            running[job_folder] = make_process_file(args_,sim_folder, meta)
-            
+            if args.post_only:
+                running[job_folder], input_args = make_post_process_folder(args_, sim_folder, meta)
+            else:
+                running[job_folder] = make_process_file(args_,sim_folder, meta)
+                input_args = (file,)
+                
+            while True:
+                # Count how many processes in procs are still alive
+                alive_count = sum(1 for p in procs if p.is_alive())
+                if alive_count < config.MAX_WORKERS_:
+                    break
+                time.sleep(1)  # sleep a bit and re-check
+
             p = Process(
                 target=running[job_folder].run,
-                args=(file,),
+                args= input_args,
                 daemon=True
             )
             

@@ -242,7 +242,7 @@ class Runner:
 
 class ProcessRunner: 
 
-    def __init__(self,processor: CFDOutputProcessor):
+    def __init__(self,processor: CFDOutputProcessor | SlurmJob):
         self.processor = processor
 
         signal.signal(signal.SIGINT,self.termination_handler)
@@ -250,11 +250,19 @@ class ProcessRunner:
 
     def termination_handler(self,signal_received,frame):
         logger.info(f"Received shutdown signal ({signal_received}). Initiating graceful shutdown.")
-        self.processor.shutdown()  # Shutdown ThreadPool and running jobs
+        if isinstance(self.processor, CFDOutputProcessor):
+            self.processor.shutdown()
+        elif isinstance(self.processor,SlurmJob):
+            try:
+                self.processor.kill()
+                logger.info(f"Killed job {self.processor}")
+            except Exception as e:
+                logger.error(f"Error killing job {self.processor}: {str(e)}")
+
         # Optionally wait for the observer to finish if needed
         sys.exit(0)
 
-    def run(self, file: Path):
+    def run(self, *args, **kwargs):
         """
         Run the CFD output processor on the given file.
         
@@ -262,11 +270,18 @@ class ProcessRunner:
         - file: Path to the CFD output file to process.
         """
         try:
-            self.processor.process_file(file)
+            if isinstance(self.processor, CFDOutputProcessor):
+                self.processor.process_file(*args, **kwargs)
+            elif isinstance(self.processor, SlurmJob):
+                self.processor.run(*args, **kwargs)
         except Exception as e:
-            logger.error(f"Error processing file {file}: {str(e)}")
+            logger.error(f"Error processing")
 
-        self.processor.shutdown()
+        if isinstance(self.processor, CFDOutputProcessor):
+            self.processor.shutdown()
+        else:
+            logger.info(f"Shutting down Slurm job {self.processor}")
+            self.processor.kill()
          
 def main():
 
