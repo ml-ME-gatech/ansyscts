@@ -7,12 +7,13 @@ import logging
 from pathlib import Path
 import os
 import datetime
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Any
 import pandas as pd
 import copy
 from multiprocessing import Process
 import signal
 import sys
+from sim_datautil.sim_datautil.dutil import SimulationDatabase
 
 #basic argument parsing and checking
 parser = argparse.ArgumentParser()
@@ -210,7 +211,7 @@ def make_process_file(args: argparse.Namespace,
 
 def make_post_process_folder(args: argparse.Namespace,
                              sim_folder: Path,
-                             meta: Dict) -> Tuple[ProcessRunner,Tuple]:
+                             meta: Dict) -> Tuple[ProcessRunner,Tuple[Any]]:
     """
     This function is used to create a post-processing file.
     It will create a new folder for the job and run the job in that folder.
@@ -232,10 +233,10 @@ def make_post_process_folder(args: argparse.Namespace,
         if value is None:
             logger.warning(f'File {key} not found in {sim_folder}, skipping post-processing')
     
-    args = (files['structural_results'], files['cfd_output'], files['cfd_interpolatted'],
+    inputs = (files['structural_results'], files['cfd_output'], files['cfd_interpolatted'],
             None,args.db_name, config.REPORT_FILE_NAME_,False,meta,folder.name)
     
-    return ProcessRunner(post),args
+    return ProcessRunner(post),inputs
 
 def process_file(file: str | Path,
                 args: argparse.Namespace,
