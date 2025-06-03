@@ -233,8 +233,9 @@ def make_post_process_folder(args: argparse.Namespace,
         if value is None:
             logger.warning(f'File {key} not found in {sim_folder}, skipping post-processing')
     
-    inputs = (files['structural_results'], files['cfd_output'], files['cfd_interpolatted'],
-            None,args.db_name, config.REPORT_FILE_NAME_,False,meta,sim_folder.name)
+    inputs = (files['structural_results'].resolve(), files['cfd_output'].resolve(), files['cfd_interpolatted'].resolve(),
+            None,folder.joinpath(args.db_name).resolve(), 
+            folder.joinpath(config.REPORT_FILE_NAME_).resolve(),False,meta,sim_folder.name)
     
     return ProcessRunner(post),inputs
 
