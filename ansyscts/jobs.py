@@ -308,19 +308,24 @@ class PostProcess(SlurmJob):
                                                     **self.resource_kwargs)
     
     def get_flow_time_from_report_file(self,report_file: Path,
-                                            time_step: int) -> int:
-        df = _safe_read_csv_file(report_file, header = None,skiprows=3,sep = r'\s+')
-        with open(report_file,'r') as f:
-            for line in f.readlines():
-                if '("Time Step"' in line:
-                    columns = line.strip()[1:-1].split('"')
-                    columns = [col.replace('"','').strip() for col in columns]
-                    columns = [col for col in columns if col]
-                    break
+                                            time_step: int) -> float | None:
+        try:
+            df = _safe_read_csv_file(report_file, header = None,skiprows=3,sep = r'\s+')
+            with open(report_file,'r') as f:
+                for line in f.readlines():
+                    if '("Time Step"' in line:
+                        columns = line.strip()[1:-1].split('"')
+                        columns = [col.replace('"','').strip() for col in columns]
+                        columns = [col for col in columns if col]
+                        break
 
-        df.columns = columns
-        df.set_index('Time Step', inplace=True) 
-        return df.loc[time_step,'flow-time']
+            df.columns = columns
+            df.set_index('Time Step', inplace=True) 
+            return float(df.loc[time_step,'flow-time'])
+        
+        except Exception as e: 
+            logger.error('Could not get time-step from report file due to the following error:\n' + str(e))
+            return None
     
     def run(self,  structural_results_folder: Path,
                    cfd_output_file: Path,
@@ -335,7 +340,7 @@ class PostProcess(SlurmJob):
         
         if time_step is not None:
             flow_time = self.get_flow_time_from_report_file(report_file,time_step)
-            meta.update({'flow_time': float(flow_time), 'time_step': time_step})
+            meta.update({'flow_time': flow_time, 'time_step': time_step})
         else:
             flow_time = None
         
